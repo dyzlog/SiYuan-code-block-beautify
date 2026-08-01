@@ -14,7 +14,7 @@
   "displayName": {
     "default": "code-block-beautify",
     "en_US": "Code Block Beautify",
-    "zh_CN": "代码块美化"
+    "zh_CN": "代码块美化助手"
   },
   "description": {
     "default": "Beautify code blocks in Siyuan: rounded corners, shadows, line numbers and code folding.",
