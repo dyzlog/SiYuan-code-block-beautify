@@ -1,0 +1,9 @@
+@use "./styles/codeblock";
+
+/* 设置面板容器：限制高度、内容滚动、可拖拽调节（右下角拖拽手柄） */
+.cb-setting-root {
+  max-height: calc(70vh - 80px);
+  min-height: 200px;
+  overflow-y: auto;
+  resize: vertical;
+}

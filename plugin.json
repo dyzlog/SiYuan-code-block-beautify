@@ -1,0 +1,37 @@
+{
+  "name": "code-block-beautify",
+  "author": "dyzlog",
+  "url": "https://github.com/dyzlog/SiYuan-code-block-beautify",
+  "version": "1.0.0",
+  "minAppVersion": "2.10.14",
+  "disabledInPublish": true,
+  "backends": [
+    "all"
+  ],
+  "frontends": [
+    "all"
+  ],
+  "displayName": {
+    "default": "code-block-beautify",
+    "en_US": "Code Block Beautify",
+    "zh_CN": "代码块美化"
+  },
+  "description": {
+    "default": "Beautify code blocks in Siyuan: rounded corners, shadows, line numbers and code folding.",
+    "en_US": "Beautify code blocks in Siyuan: rounded corners, shadows, line numbers and code folding.",
+    "zh_CN": "美化思源笔记中的代码块：圆角阴影、行号、代码内折叠。"
+  },
+  "readme": {
+    "default": "README.md",
+    "en_US": "README.md",
+    "zh_CN": "README_zh_CN.md"
+  },
+  "funding": {
+    "custom": []
+  },
+  "keywords": [
+    "code block",
+    "美化",
+    "beautify"
+  ]
+}

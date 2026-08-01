@@ -1,0 +1,708 @@
+/**
+ * 代码块美化插件 - 样式
+ * 全部使用思源主题变量（--b3-*），自动适配深浅色主题。
+ */
+
+.code-block.cb-beautified {
+  position: relative;
+  border-radius: var(--cb-radius, 8px);
+  box-shadow: var(--cb-shadow, none);
+  border: var(--cb-border-width, 1px) solid var(--cb-border-color, var(--b3-border-color));
+  /* 用户自定义背景色（空值时无效，回退主题默认） */
+  background-color: var(--cb-bg-color) !important;
+  overflow: hidden;
+  /* 创建 stacking context：让 z-index 为负的背景/缩进线保持在背景之上、代码内容之下 */
+  isolation: isolate;
+
+  /* 自定义背景图片：虚化后作为背景，不遮挡代码 */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background-image: var(--cb-bg-image, none);
+    background-size: cover;
+    background-position: center;
+    filter: blur(var(--cb-bg-blur, 16px));
+    pointer-events: none;
+  }
+
+  /* 半透明遮罩：保证图片虚化后代码仍清晰可读（透明度可调） */
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-color: color-mix(in srgb, var(--b3-theme-background) var(--cb-bg-mask-opacity, 78%), transparent);
+    pointer-events: none;
+  }
+
+  /* 预留行号列宽度（仅当存在行号列时）：分割线到代码留 12px 呼吸空间 */
+  &.cb-with-linenumbers .hljs {
+    padding-left: calc(var(--cb-linenumber-width, 3em) + 12px) !important;
+  }
+}
+
+/* ---------------- 行号列 ---------------- */
+
+.cb-linenumbers {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  width: var(--cb-linenumber-width, 3em);
+  overflow: hidden;
+  user-select: none;
+  pointer-events: none;
+
+  .cb-linenumbers__inner {
+    position: relative;
+    will-change: translate;
+  }
+
+  .cb-linenumber {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    padding-right: 10px;
+    font-size: var(--cb-line-font-size, 14px);
+    font-family: var(--cb-font-family, var(--b3-font-code, monospace));
+    color: var(--b3-theme-on-surface);
+    box-sizing: border-box;
+  }
+
+  /* 折叠箭头槽位：统一宽度，无箭头的代码块也保留，保证行号同列 */
+  .cb-fold-slot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    flex-shrink: 0;
+  }
+
+  .cb-linenumber__num {
+    /* VS Code 风格：行号右对齐到箭头前；折叠箭头位于行号和代码之间 */
+    margin-left: auto;
+    opacity: 0.6;
+  }
+}
+
+/* ---------------- 代码内折叠 ---------------- */
+
+.cb-fold-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--b3-theme-on-surface);
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0.3;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+
+  /* 仅当鼠标悬停在箭头标记本身（或键盘聚焦）时才加深 */
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+  }
+
+  &:hover {
+    background-color: var(--b3-theme-background-light);
+  }
+
+  &:hover {
+    opacity: 1;
+    background-color: var(--b3-theme-background-light);
+  }
+
+  /* 下箭头（可折叠）：CSS 三角形 */
+  &::before {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 4.5px solid transparent;
+    border-right: 4.5px solid transparent;
+    border-top: 6.75px solid currentColor;
+  }
+
+  /* 右箭头（已折叠） */
+  &.cb-fold-btn--folded::before {
+    border-top: 4.5px solid transparent;
+    border-bottom: 4.5px solid transparent;
+    border-left: 6.75px solid currentColor;
+  }
+}
+
+/* 被折叠隐藏的代码行（行元素模式，作用于 .hljs-line） */
+.cb-fold-hidden {
+  display: none !important;
+}
+
+/* 文本模式折叠：省略行（位于 .hljs 内）。
+   文本用 CSS content 渲染，不进入 textContent，避免污染思源数据同步 */
+.cb-fold-ellipsis {
+  display: block;
+  height: var(--cb-line-height, 1.6em);
+  line-height: var(--cb-line-height, 1.6em);
+  color: var(--b3-theme-on-surface);
+  font-size: var(--cb-line-font-size, 14px);
+  font-family: var(--cb-font-family, var(--b3-font-code, monospace));
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.55;
+  /* VS Code 风格：折叠区域高亮 */
+  background-color: rgba(125, 125, 125, 0.1);
+  border-radius: 2px;
+
+  &::before {
+    content: "⋯ 已折叠 " attr(data-count) " 行";
+  }
+
+  &:hover {
+    opacity: 0.9;
+    background-color: rgba(125, 125, 125, 0.16);
+  }
+}
+
+/* VS Code 风格：代码缩进竖线（indent guides）。
+   z-index 为负：位于代码内容之下，代码字符会覆盖竖线，产生"竖线被行截断"的效果 */
+.cb-indent-guides {
+  position: absolute;
+  top: 0;
+  left: calc(var(--cb-linenumber-width, 3em) + 12px);
+  right: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+
+  .cb-indent-guide {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    /* 缩进参考线颜色（用户可自定义，空值回退默认淡灰） */
+    background-color: var(--cb-indent-guide-color, rgba(127, 127, 127, 0.15));
+  }
+}
+
+/* 行号列中的省略项 */
+.cb-linenumber--ellipsis {
+  justify-content: center;
+  opacity: 0.55;
+}
+
+/* ---------------- 长代码折叠 ---------------- */
+
+/* 顶部主题装饰栏：占代码块宽度 5/6（纯色背景），
+   右侧留 1/6 给思源原生右上角（语言/复制/更多）按钮，互不遮挡 */
+.cb-longcode-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 83.33%;
+  height: 24px;
+  z-index: 3;
+  pointer-events: none;
+  background-color: var(--cb-bg-color, var(--b3-theme-background-light));
+  border-bottom: 1px solid var(--b3-border-color);
+  opacity: 0.95;
+  transition: opacity 0.2s;
+
+  /* 滚动查看代码时虚化，停止滚动后恢复 */
+  &--scrolling {
+    opacity: 0.2;
+  }
+
+  /* Chrome 风格：浅灰顶栏 */
+  &.cb-longcode-bar--chrome {
+    background-color: #e8e8e8;
+  }
+
+  /* Mac / Ubuntu / 终端：左侧圆点 */
+  .cb-longcode-dots {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    .cb-longcode-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+
+      &--red {
+        background-color: #ff5f57;
+      }
+
+      &--yellow {
+        background-color: #febc2e;
+      }
+
+      &--green {
+        background-color: #28c840;
+      }
+
+      &--orange {
+        background-color: #f6762e;
+      }
+
+      &--amber {
+        background-color: #fbbf24;
+      }
+
+      &--green2 {
+        background-color: #4ade80;
+      }
+    }
+  }
+
+  /* Windows 风格：左侧窗口控制按钮（✕ ▢ ─） */
+  .cb-longcode-win {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--b3-theme-on-surface);
+
+    .cb-longcode-win-btn {
+      font-size: 12px;
+      line-height: 1;
+      opacity: 0.7;
+    }
+  }
+
+  /* Chrome 标签风格 */
+  .cb-longcode-chrome {
+    position: absolute;
+    left: 12px;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .cb-longcode-chrome-tab {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 12px;
+      background-color: var(--b3-theme-background);
+      border-radius: 8px 8px 0 0;
+      font-size: 12px;
+      color: var(--b3-theme-on-surface);
+    }
+
+    .cb-longcode-chrome-plus {
+      font-size: 14px;
+      line-height: 1;
+      color: var(--b3-theme-on-surface);
+      opacity: 0.6;
+    }
+  }
+
+}
+
+/* 底部「收起/展开」按钮 */
+.cb-longcode-btn {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  pointer-events: auto;
+  padding: 2px 16px;
+  font-size: 12px;
+  line-height: 18px;
+  border: 1px solid var(--b3-border-color);
+  border-radius: 12px;
+  background-color: var(--b3-theme-background);
+  color: var(--b3-theme-on-surface);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  transition: opacity 0.2s;
+
+  &:hover {
+    background-color: var(--b3-theme-background-light);
+  }
+
+  /* 滚动查看时虚化 */
+  &--scrolling {
+    opacity: 0.2;
+  }
+}
+
+/* 代码块内部滚动条：细淡样式（滚动预览时可见可拖，不占大空间） */
+.code-block.cb-beautified .hljs {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(127, 127, 127, 0.35) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: rgba(127, 127, 127, 0.35);
+    border-radius: 3px;
+
+    &:hover {
+      background-color: rgba(127, 127, 127, 0.55);
+    }
+  }
+
+  &::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+}
+
+/* ---------------- 背景主题：魔法阵（多层华丽版） ---------------- */
+.cb-magic-circle {
+  position: absolute;
+  z-index: 0;
+  opacity: 0.2;
+  pointer-events: none;
+  user-select: none;
+  /* 外发光：小幅辉光（过大 blur 会弥散成雾气吃掉线条） */
+  filter: drop-shadow(0 0 6px currentColor);
+  /* 随机色相（JS 生成时设置 --cb-mg-hue）；线条明暗由主题 CSS 自动决定 */
+  --cb-mg-hue: 200;
+  --cb-mg-dark-core: 0;
+  --cb-mg-dark-mid: 0;
+  /* 明亮主题（默认）：暗色系线条 + 无深色底盘 */
+  color: hsl(var(--cb-mg-hue) 65% 28%);
+  /* 尺寸 / 位置 / transform 由 JS 随机生成后内联设置 */
+
+  .cb-magic-circle-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* 各组旋转动画：不同速度、不同方向，层层交错 */
+  .cb-mg-sun {
+    animation: cb-mg-spin-cw 80s linear infinite;
+    transform-origin: 0px 0px;
+  }
+
+  .cb-mg-moon {
+    animation: cb-mg-spin-ccw 60s linear infinite;
+    transform-origin: 0px 0px;
+  }
+
+  .cb-mg-constellation {
+    animation: cb-mg-spin-ccw 120s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-rings {
+    animation: cb-mg-spin-ccw 70s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-star {
+    animation: cb-mg-spin-ccw 90s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-star-spin {
+    animation: cb-mg-spin-cw 40s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-square {
+    animation: cb-mg-spin-cw 45s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-suits {
+    animation: cb-mg-spin-ccw 100s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-tools {
+    animation: cb-mg-spin-ccw 90s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-hexagram {
+    animation: cb-mg-spin-cw 80s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-pentagram2 {
+    animation: cb-mg-spin-cw 70s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-runes-ring {
+    animation: cb-mg-spin-ccw 110s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-planets {
+    animation: cb-mg-spin-ccw 95s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-alchemy {
+    animation: cb-mg-spin-cw 105s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-pentagram {
+    animation: cb-mg-spin-cw 75s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-wheel {
+    animation: cb-mg-spin-cw 55s linear infinite;
+    transform-origin: 200px 200px;
+  }
+
+  .cb-mg-core {
+    animation: cb-mg-pulse 3s ease-in-out infinite;
+    transform-origin: 200px 200px;
+  }
+
+  /* 粒子特效：魔法阵周围飘动的光点 */
+  .cb-mg-particle {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+    animation: cb-mg-particle 4s ease-in-out infinite alternate;
+    box-shadow: 0 0 6px currentColor;
+  }
+
+  /* 轻量 Canvas 光带特效层 */
+  .cb-mg-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+}
+
+/* 暗色主题：明亮系线条 + 深色底盘。
+   切换明/暗主题时 body class 变化 → 颜色自动改变，魔法阵结构/位置保持不变 */
+body.b3-theme--dark .cb-magic-circle {
+  color: hsl(var(--cb-mg-hue) 80% 55%);
+  --cb-mg-dark-core: 0.42;
+  --cb-mg-dark-mid: 0.25;
+}
+
+@keyframes cb-mg-particle {
+  0% {
+    opacity: 0.15;
+    transform: translate(0, 0) scale(0.7);
+  }
+
+  50% {
+    opacity: 0.9;
+  }
+
+  100% {
+    opacity: 0.3;
+    transform: translate(8px, -10px) scale(1.3);
+  }
+}
+
+@keyframes cb-mg-spin-cw {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes cb-mg-spin-ccw {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes cb-mg-pulse {
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+/* 思源原生右上角工具（语言/复制/更多）悬浮显示，不被装饰栏遮挡 */
+
+/* ---------------- 背景纹理（CSS 主题） ---------------- */
+/* 网格纸：透明格线叠加在背景色上 */
+.code-block.cb-beautified.cb-bg-grid {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.07) 0 1px, transparent 1px 24px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.07) 0 1px, transparent 1px 24px);
+}
+
+/* 点阵：均匀小点 */
+.code-block.cb-beautified.cb-bg-dots {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.18) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+/* 星空：半透明深蓝底 + 多颗星星 */
+.code-block.cb-beautified.cb-bg-starfield {
+  background-image:
+    radial-gradient(1px 1px at 15% 25%, rgba(255, 255, 255, 0.75), transparent),
+    radial-gradient(1px 1px at 35% 70%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 55% 15%, rgba(255, 255, 255, 0.65), transparent),
+    radial-gradient(1px 1px at 75% 45%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1px 1px at 90% 80%, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1.5px 1.5px at 25% 85%, rgba(255, 255, 255, 0.55), transparent),
+    linear-gradient(rgba(6, 12, 36, 0.75), rgba(6, 12, 36, 0.75));
+}
+
+/* 代码雨：绿色竖线纹理 */
+.code-block.cb-beautified.cb-bg-matrix {
+  background-image:
+    repeating-linear-gradient(90deg, transparent 0 22px, rgba(0, 255, 130, 0.09) 22px 23px),
+    repeating-linear-gradient(0deg, transparent 0 22px, rgba(0, 255, 130, 0.05) 22px 23px);
+}
+
+/* 代码字体（空值回退跟随主题） */
+.code-block.cb-beautified .hljs {
+  font-family: var(--cb-code-font-family, var(--b3-font-code, monospace));
+}
+
+/* ---------------- 代码统计角标 ---------------- */
+.cb-stats-badge {
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  z-index: 2;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--b3-theme-on-surface);
+  opacity: 0.35;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---------------- 当前行高亮 ---------------- */
+.cb-current-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--cb-current-line-color, var(--b3-theme-primary-lightest, rgba(0, 120, 212, 0.08)));
+  border-radius: 4px;
+}
+
+/* ---------------- 设置面板 ---------------- */
+.cb-setting__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--b3-theme-primary);
+  margin: 16px 0 8px;
+  padding-left: 8px;
+  border-left: 3px solid var(--b3-theme-primary);
+  line-height: 1.4;
+  letter-spacing: 0.5px;
+}
+
+.cb-setting__item {
+  min-height: 32px;
+  margin-bottom: 10px;
+  gap: 10px;
+  align-items: center;
+}
+
+.cb-setting__label {
+  min-width: 110px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--b3-theme-on-surface);
+}
+
+.cb-setting__hint {
+  font-size: 12px;
+  color: var(--b3-theme-on-surface-light);
+  margin-left: auto;
+  text-align: right;
+  flex-shrink: 1;
+}
+
+.cb-setting__value {
+  min-width: 40px;
+  font-size: 12px;
+  color: var(--b3-theme-on-surface);
+  text-align: right;
+}
+
+.cb-setting__slider {
+  flex: 1;
+  min-width: 120px;
+}
+
+.cb-setting__select {
+  max-width: 240px;
+}
+
+.cb-setting__color {
+  width: 40px;
+  height: 28px;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.cb-setting__url-row {
+  align-items: center;
+  gap: 8px;
+}
+
+.cb-setting__url {
+  flex: 1;
+  min-width: 0;
+}
+
+.cb-setting__url-hint {
+  margin: 2px 0 8px;
+  text-align: left;
+}
+
+.cb-setting__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  padding: 10px 0 4px;
+  background-color: var(--b3-dialog-background, var(--b3-theme-background));
+  border-top: 1px solid var(--b3-border-color);
+  margin-top: 8px;
+  gap: 8px;
+}
+
+.cb-setting__reset {
+  margin-right: auto;
+}
