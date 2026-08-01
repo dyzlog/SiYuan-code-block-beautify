@@ -150,6 +150,42 @@ export function clearThemeStyleClass() {
  * @param topNHeight 前 N 行的高度（px，折叠时 max-height 用）
  * @param themeStyle 顶部栏主题风格（"" = 无，mac/windows/terminal/vscode/github/ubuntu/chrome）
  */
+/** 确保顶部主题装饰栏存在（创建/复用，含滚动虚化监听） */
+function ensureThemeBar(codeBlock: HTMLElement): HTMLElement {
+  let bar = codeBlock.querySelector<HTMLElement>(`.${BAR_CLASS}`)
+  if (!bar) {
+    bar = document.createElement("div")
+    bar.className = BAR_CLASS
+    bar.setAttribute("contenteditable", "false")
+    codeBlock.appendChild(bar)
+    // 滚动查看时装饰栏与按钮虚化，停止滚动后恢复
+    const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
+    if (hljs) {
+      let fadeTimer = 0
+      hljs.addEventListener("scroll", () => {
+        bar?.classList.add(BAR_SCROLLING_CLASS)
+        const b = codeBlock.querySelector<HTMLElement>(`.${BTN_CLASS}`)
+        b?.classList.add(BTN_SCROLLING_CLASS)
+        window.clearTimeout(fadeTimer)
+        fadeTimer = window.setTimeout(() => {
+          bar?.classList.remove(BAR_SCROLLING_CLASS)
+          b?.classList.remove(BTN_SCROLLING_CLASS)
+        }, 300)
+      })
+    }
+  }
+  return bar
+}
+
+/** 短代码块主题装饰栏：仅顶部风格装饰，无收起/展开按钮 */
+export function renderThemeBar(codeBlock: HTMLElement, themeStyle: string) {
+  const bar = ensureThemeBar(codeBlock)
+  // 短代码无折叠：确保不显示收起按钮与折叠状态
+  bar.querySelector(`.${BTN_CLASS}`)?.remove()
+  bar.classList.remove(BAR_SCROLLING_CLASS)
+  renderThemeDecor(bar, themeStyle)
+}
+
 export function renderLongCodeBar(
   codeBlock: HTMLElement,
   lineCount: number,
@@ -159,13 +195,13 @@ export function renderLongCodeBar(
 ) {
   const wasFolded = isFolded(codeBlock)
   const isLong = lineCount > threshold
-  let bar = codeBlock.querySelector<HTMLElement>(`.${BAR_CLASS}`)
-  let btn = codeBlock.querySelector<HTMLButtonElement>(`.${BTN_CLASS}`)
   if (!isLong && !wasFolded) {
     // 非长代码且未折叠：完整清理（复用 clearLongCodeBar）
     clearLongCodeBar(codeBlock)
     return
   }
+  const bar = ensureThemeBar(codeBlock)
+  let btn = bar.querySelector<HTMLButtonElement>(`.${BTN_CLASS}`)
   if (!btn) {
     btn = document.createElement("button")
     btn.type = "button"
@@ -189,26 +225,6 @@ export function renderLongCodeBar(
       codeBlock.querySelectorAll(".cb-magic-circle").forEach((el) => el.remove())
     })
     codeBlock.appendChild(btn)
-  }
-  if (!bar) {
-    bar = document.createElement("div")
-    bar.className = BAR_CLASS
-    bar.setAttribute("contenteditable", "false")
-    codeBlock.appendChild(bar)
-    // 滚动查看时装饰栏与按钮虚化，停止滚动后恢复
-    const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
-    if (hljs) {
-      let fadeTimer = 0
-      hljs.addEventListener("scroll", () => {
-        bar?.classList.add(BAR_SCROLLING_CLASS)
-        btn?.classList.add(BTN_SCROLLING_CLASS)
-        window.clearTimeout(fadeTimer)
-        fadeTimer = window.setTimeout(() => {
-          bar?.classList.remove(BAR_SCROLLING_CLASS)
-          btn?.classList.remove(BTN_SCROLLING_CLASS)
-        }, 300)
-      })
-    }
   }
   // 恢复折叠状态（data 属性持久化），高度：同阈值用缓存，阈值变化自动调整
   const folded = wasFolded

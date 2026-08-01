@@ -31,6 +31,7 @@ import { getCodeBlockLanguage } from "./language"
 import {
   clearLongCodeBar,
   renderLongCodeBar,
+  renderThemeBar,
 } from "./longcode"
 import { registerRenderer } from "./registry"
 
@@ -481,28 +482,36 @@ export function renderLineNumbers(codeBlock: HTMLElement, settings: CodeBlockSet
     } else {
       codeBlock.querySelector(".cb-indent-guides")?.remove()
     }
-    // 长代码折叠：超过阈值行数显示「只显示固定行」按钮（仅文本模式）
+    // 长代码折叠 + 顶部主题装饰栏（仅文本模式）。
+    // 短代码块也显示主题装饰（无收起按钮）；长代码才加收起/展开
     if (!lineMode) {
-      if (settings.longCodeFold) {
+      const showTheme = settings.themeStyleEnabled && settings.themeStyle
+      if (!showTheme) {
+        clearLongCodeBar(codeBlock)
+      } else if (settings.longCodeFold) {
         const lineCount = countVisibleLines(text)
         const n = settings.longCodeThreshold
-        const lastIdx = Math.min(n, tops.length) - 1
-        const hljsStyle = getComputedStyle(hljs)
-        const padBottom = Number.parseFloat(hljsStyle.paddingBottom) || 0
-        const borderV = (Number.parseFloat(hljsStyle.borderTopWidth) || 0)
-          + (Number.parseFloat(hljsStyle.borderBottomWidth) || 0)
-        const topNHeight = tops.length > 0 && lastIdx >= 0
-          ? tops[lastIdx] + heightAt(lastIdx) + padBottom + borderV
-          : 0
-        renderLongCodeBar(
-          codeBlock,
-          lineCount,
-          n,
-          topNHeight,
-          settings.themeStyleEnabled ? settings.themeStyle : "",
-        )
+        if (lineCount > n) {
+          const lastIdx = Math.min(n, tops.length) - 1
+          const hljsStyle = getComputedStyle(hljs)
+          const padBottom = Number.parseFloat(hljsStyle.paddingBottom) || 0
+          const borderV = (Number.parseFloat(hljsStyle.borderTopWidth) || 0)
+            + (Number.parseFloat(hljsStyle.borderBottomWidth) || 0)
+          const topNHeight = tops.length > 0 && lastIdx >= 0
+            ? tops[lastIdx] + heightAt(lastIdx) + padBottom + borderV
+            : 0
+          renderLongCodeBar(
+            codeBlock,
+            lineCount,
+            n,
+            topNHeight,
+            settings.themeStyle,
+          )
+        } else {
+          renderThemeBar(codeBlock, settings.themeStyle)
+        }
       } else {
-        clearLongCodeBar(codeBlock)
+        renderThemeBar(codeBlock, settings.themeStyle)
       }
     }
     // 行号列内容总高度（滚动同步时底部内容可显示）
