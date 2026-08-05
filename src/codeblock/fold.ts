@@ -135,15 +135,7 @@ function hasBraceBlocks(lines: string[]): boolean {
   return false
 }
 
-/**
- * 解析代码折叠区域。
- * @param code 代码文本
- * @param language 代码块语言（思源语言标签），命中已知语言时按语言选择解析策略；
- *                 未知语言回退到启发式判定
- */
-/**
- * 花括号匹配：按 `{`/`}` 深度栈闭合区域
- */
+/** 花括号匹配：按 `{`/`}` 深度栈闭合区域 */
 function findBraceRegions(lines: string[]): FoldRegion[] {
   const regions: FoldRegion[] = []
   const stack: { start: number, depth: number }[] = []
@@ -211,6 +203,8 @@ function findIndentRegions(lines: string[]): FoldRegion[] {
       })
     }
   }
+  // 循环结束：闭合剩余未闭合的块（块延伸到文件末尾，如文件结尾的 except/for 块）
+  popTo(-1, lines.length)
   return regions
 }
 

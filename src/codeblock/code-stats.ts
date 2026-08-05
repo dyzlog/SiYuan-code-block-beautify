@@ -2,7 +2,11 @@
  * 代码统计角标：代码块底部右下角显示行数 / 字符数。
  * 低透明度、pointer-events none，不影响滚动与交互。
  */
+import { getOverlay } from "../utils/overlay"
 import { countVisibleLines } from "../utils/text-range"
+import {
+  registerDecor,
+} from "./registry"
 
 /** 统计角标类名 */
 const STATS_CLASS = "cb-stats-badge"
@@ -13,7 +17,7 @@ const controllers = new WeakMap<HTMLElement, AbortController>()
 /** 更新统计角标内容 */
 function updateStats(codeBlock: HTMLElement) {
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
-  const badge = codeBlock.querySelector<HTMLElement>(`.${STATS_CLASS}`)
+  const badge = getOverlay(codeBlock).querySelector<HTMLElement>(`.${STATS_CLASS}`)
   if (!hljs || !badge) {
     return
   }
@@ -25,7 +29,7 @@ function updateStats(codeBlock: HTMLElement) {
 
 /** 初始化代码统计角标（开启时创建并跟随输入更新，关闭时移除） */
 export function initCodeStats(codeBlock: HTMLElement, enabled: boolean) {
-  let badge = codeBlock.querySelector<HTMLElement>(`.${STATS_CLASS}`)
+  let badge = getOverlay(codeBlock).querySelector<HTMLElement>(`.${STATS_CLASS}`)
   if (!enabled) {
     removeCodeStats(codeBlock)
     return
@@ -38,7 +42,7 @@ export function initCodeStats(codeBlock: HTMLElement, enabled: boolean) {
     badge = document.createElement("div")
     badge.className = STATS_CLASS
     badge.setAttribute("contenteditable", "false")
-    codeBlock.appendChild(badge)
+    getOverlay(codeBlock).appendChild(badge)
   }
   updateStats(codeBlock)
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
@@ -49,5 +53,19 @@ export function initCodeStats(codeBlock: HTMLElement, enabled: boolean) {
 export function removeCodeStats(codeBlock: HTMLElement) {
   controllers.get(codeBlock)?.abort()
   controllers.delete(codeBlock)
-  codeBlock.querySelector(`.${STATS_CLASS}`)?.remove()
+  getOverlay(codeBlock).querySelector(`.${STATS_CLASS}`)?.remove()
 }
+
+registerDecor({
+  selfSelector: ".cb-stats-badge",
+  enhance: ({
+    codeBlock,
+    settings,
+  }) => {
+    initCodeStats(codeBlock, settings.codeStats)
+  },
+  cleanup: (codeBlock) => {
+    removeCodeStats(codeBlock)
+  },
+})
+

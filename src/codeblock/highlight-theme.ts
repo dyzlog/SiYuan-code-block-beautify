@@ -66,3 +66,27 @@ export function applyHighlightTheme(theme: string) {
 export function clearHighlightTheme() {
   document.getElementById(LINK_ID)?.remove()
 }
+
+/** 代码块顶部主题装饰栏的全局 class 前缀（用于配色原生右上角工具按钮） */
+const THEME_CLASS_PREFIX = "cb-theme-"
+
+/**
+ * 应用主题装饰栏对应的全局配色 class（mac/windows/ubuntu/chrome 等）。
+ * 此 class 放在 `<html>` 上，让 CSS 重写思源原生右上角工具（语言/复制/更多）的配色。
+ */
+export function applyThemeStyleClass(themeStyle: string) {
+  const root = document.documentElement
+  root.classList.forEach((cls) => {
+    if (cls.startsWith(THEME_CLASS_PREFIX)) {
+      root.classList.remove(cls)
+    }
+  })
+  if (themeStyle) {
+    root.classList.add(`${THEME_CLASS_PREFIX}${themeStyle}`)
+  }
+}
+
+/** 移除主题风格全局标记 */
+export function clearThemeStyleClass() {
+  applyThemeStyleClass("")
+}

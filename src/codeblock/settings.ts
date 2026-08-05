@@ -16,10 +16,8 @@ export interface CodeBlockSettings {
   backgroundColor: string
   /** 代码块背景图片 URL（空 = 无，图片会自动虚化） */
   backgroundImage: string
-  /** 背景主题（"" = 无，"magic-circle" = 魔法阵，"starfield/grid/dots/matrix" = CSS 纹理） */
+  /** 背景主题（"" = 无，其余 = CSS 纹理） */
   backgroundTheme: string
-  /** 卫星阵样式：中心主阵 + 周围 3 个小阵（重叠 ≤ 小阵 20%） */
-  magicSatellite: boolean
   /** 代码字体族（空 = 跟随主题） */
   codeFontFamily: string
   /** 背景图片虚化强度 (px) */
@@ -42,6 +40,8 @@ export interface CodeBlockSettings {
   indentGuideColor: string
   /** 彩虹缩进竖线（不同缩进层级不同颜色，优先于自定义色） */
   rainbowIndent: boolean
+  /** active guide 高亮（光标所在缩进级别的竖线加深，VS Code 风格） */
+  activeGuideHighlight: boolean
   /** 代码统计角标（底部显示行数/字符数） */
   codeStats: boolean
   /** 语法高亮主题（空 = 跟随思源设置，否则覆盖为指定 hljs 主题） */
@@ -64,7 +64,6 @@ export const DEFAULT_SETTINGS: CodeBlockSettings = {
   backgroundColor: "",
   backgroundImage: "",
   backgroundTheme: "",
-  magicSatellite: true,
   codeFontFamily: "",
   backgroundBlur: 16,
   backgroundMaskOpacity: 78,
@@ -76,6 +75,7 @@ export const DEFAULT_SETTINGS: CodeBlockSettings = {
   showIndentGuides: true,
   indentGuideColor: "",
   rainbowIndent: true,
+  activeGuideHighlight: true,
   codeStats: true,
   highlightTheme: "",
   longCodeFold: true,

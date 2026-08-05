@@ -17,7 +17,8 @@ import { findFoldRegions } from "./fold"
 import { getCodeBlockLanguage } from "./language"
 import { rerenderBlock } from "./registry"
 
-const ELLIPSIS_CLASS = "cb-fold-ellipsis"
+/** 折叠省略行类名（enhancer 兜底清理 / linenumbers 复用） */
+export const ELLIPSIS_CLASS = "cb-fold-ellipsis"
 
 const FOLDED_CLASS = "cb-folded"
 const FOLD_HIDDEN_CLASS = "cb-fold-hidden"
@@ -70,6 +71,20 @@ export function toggleFold(codeBlock: HTMLElement, startLine: number) {
   rerenderBlock(codeBlock)
 }
 
+/** 折叠按钮（折叠态显示右箭头，否则下箭头），箭头用 CSS 三角形绘制 */
+export function makeFoldBtn(codeBlock: HTMLElement, lineNo: number, folded: boolean): HTMLButtonElement {
+  const btn = document.createElement("button")
+  btn.type = "button"
+  btn.className = folded ? "cb-fold-btn cb-fold-btn--folded" : "cb-fold-btn"
+  btn.title = folded ? "展开代码块" : "折叠代码块"
+  btn.addEventListener("click", (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    toggleFold(codeBlock, lineNo)
+  })
+  return btn
+}
+
 /** 进入编辑时展开该块所有折叠，避免影响输入 */
 export function unfoldAll(codeBlock: HTMLElement) {
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
@@ -101,6 +116,8 @@ export function pruneFoldStates(codeBlock: HTMLElement) {
   state.areas = state.areas.filter((a) => a.ellipsis.isConnected)
   if (state.areas.length === 0) {
     foldStates.delete(codeBlock)
+    // 省略行被外部移除（思源 lazy 渲染等）导致折叠状态清空时，恢复可编辑
+    codeBlock.querySelector<HTMLElement>(".hljs")?.setAttribute("contenteditable", "true")
   }
 }
 
@@ -235,6 +252,7 @@ function unfoldTextArea(codeBlock: HTMLElement, hljs: HTMLElement, area: FoldAre
   state.areas = state.areas.filter((a) => a !== area)
   if (state.areas.length === 0) {
     foldStates.delete(codeBlock)
-    hljs.setAttribute("contenteditable", "true")
   }
+  // 展开后始终恢复可编辑（折叠内容已还原到 DOM，用户可编辑可见部分）
+  hljs.setAttribute("contenteditable", "true")
 }

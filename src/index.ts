@@ -15,12 +15,10 @@ import {
 } from "@/codeblock/enhancer"
 import {
   applyHighlightTheme,
-  clearHighlightTheme,
-} from "@/codeblock/highlight-theme"
-import {
   applyThemeStyleClass,
+  clearHighlightTheme,
   clearThemeStyleClass,
-} from "@/codeblock/longcode"
+} from "@/codeblock/highlight-theme"
 import SettingDialog from "@/codeblock/SettingDialog.vue"
 import {
   applySettingsVars,
@@ -31,17 +29,9 @@ import {
 } from "@/codeblock/settings"
 import "@/index.scss"
 
-let PluginInfo = {
-  version: '',
-}
-try {
-  PluginInfo = PluginInfoString
-} catch (err) {
-  console.log('Plugin info parse error: ', err)
-}
 const {
   version,
-} = PluginInfo
+} = PluginInfoString
 
 export default class CodeBlockBeautify extends Plugin {
   /** 是否运行在移动端（用于设置面板宽度） */
@@ -64,7 +54,8 @@ export default class CodeBlockBeautify extends Plugin {
     const frontEnd = getFrontend()
     this.isMobile = frontEnd === "mobile" || frontEnd === "browser-mobile"
 
-    console.log('Code Block Beautify plugin loaded, the plugin is ', this)
+
+
 
     // 先用默认设置启动，加载已保存设置后再更新
     this.applyAllSettings(this.settings)

@@ -9,6 +9,13 @@
  * 固定行数（阈值）变化时自动用新阈值重新计算高度。
  */
 
+import type { CodeBlockSettings } from "./settings"
+import { getOverlay } from "../utils/overlay"
+import { countVisibleLines } from "../utils/text-range"
+import {
+  registerDecor,
+} from "./registry"
+
 const BAR_CLASS = "cb-longcode-bar"
 const BAR_SCROLLING_CLASS = "cb-longcode-bar--scrolling"
 const BTN_CLASS = "cb-longcode-btn"
@@ -16,9 +23,11 @@ const BTN_SCROLLING_CLASS = "cb-longcode-btn--scrolling"
 const DOTS_CLASS = "cb-longcode-dots"
 const WIN_CLASS = "cb-longcode-win"
 const CHROME_CLASS = "cb-longcode-chrome"
+const TERMINAL_CLASS = "cb-longcode-terminal"
+const EKG_CLASS = "cb-longcode-ekg"
+const CODESYM_CLASS = "cb-longcode-codesym"
+const PIXEL_CLASS = "cb-longcode-pixel"
 const FOLDED_ATTR = "cbLongFolded"
-/** 主题风格在 documentElement 上的 class 前缀（如 cb-theme-chrome） */
-const THEME_CLASS_PREFIX = "cb-theme-"
 
 interface LongCodeFoldState {
   /** 折叠时的固定高度（px） */
@@ -79,15 +88,15 @@ function appendDots(bar: HTMLElement, dotClasses: string[]) {
   bar.appendChild(dots)
 }
 
-/** 渲染顶部栏主题装饰（mac / windows / ubuntu / chrome） */
+/** 渲染顶部栏主题装饰（mac / windows / ubuntu / chrome / terminal / ekg / codesym / pixel） */
 function renderThemeDecor(bar: HTMLElement, themeStyle: string) {
   // 统一标记风格 class
-  const styleClasses = ["mac", "windows", "ubuntu", "chrome"].map((s) => `${BAR_CLASS}--${s}`)
+  const styleClasses = ["mac", "windows", "ubuntu", "chrome", "terminal", "ekg", "codesym", "pixel"].map((s) => `${BAR_CLASS}--${s}`)
   bar.classList.remove(...styleClasses)
   if (styleClasses.includes(`${BAR_CLASS}--${themeStyle}`)) {
     bar.classList.add(`${BAR_CLASS}--${themeStyle}`)
   }
-  bar.querySelectorAll(`.${DOTS_CLASS}, .${WIN_CLASS}, .${CHROME_CLASS}`).forEach((el) => el.remove())
+  bar.querySelectorAll(`.${DOTS_CLASS}, .${WIN_CLASS}, .${CHROME_CLASS}, .${TERMINAL_CLASS}, .${EKG_CLASS}, .${CODESYM_CLASS}, .${PIXEL_CLASS}`).forEach((el) => el.remove())
   if (themeStyle === "mac") {
     // Mac 风格：左侧红黄绿圆点
     appendDots(bar, ["cb-longcode-dot--red", "cb-longcode-dot--yellow", "cb-longcode-dot--green"])
@@ -118,28 +127,38 @@ function renderThemeDecor(bar: HTMLElement, themeStyle: string) {
     chrome.appendChild(tab)
     chrome.appendChild(plus)
     bar.appendChild(chrome)
+  } else if (themeStyle === "terminal") {
+    // 终端提示符：❯_ 提示符 + 极简色块
+    const term = document.createElement("div")
+    term.className = TERMINAL_CLASS
+    term.textContent = "❯"
+    const cursor = document.createElement("span")
+    cursor.className = "cb-longcode-terminal-cursor"
+    cursor.textContent = "_"
+    term.appendChild(cursor)
+    bar.appendChild(term)
+  } else if (themeStyle === "ekg") {
+    // 心电图：静态 ECG 波形线
+    const ekg = document.createElement("div")
+    ekg.className = EKG_CLASS
+    ekg.innerHTML =
+      `<svg viewBox="0 0 200 24" preserveAspectRatio="none" aria-hidden="true">`
+      + `<path d="M0 12 H30 L36 4 L44 20 L52 8 L58 12 H200" fill="none" stroke="currentColor" stroke-width="1.5"/>`
+      + `</svg>`
+    bar.appendChild(ekg)
+  } else if (themeStyle === "codesym") {
+    // 代码符号：</> 装饰
+    const sym = document.createElement("div")
+    sym.className = CODESYM_CLASS
+    sym.textContent = "</>"
+    bar.appendChild(sym)
+  } else if (themeStyle === "pixel") {
+    // 像素方块：8-bit 问号块（马里奥风格）
+    const px = document.createElement("div")
+    px.className = PIXEL_CLASS
+    px.textContent = "?"
+    bar.appendChild(px)
   }
-}
-
-/**
- * 在 documentElement（html）上标记当前主题风格，供全局 CSS 适配
- * 思源原生右上角工具（语言/复制/更多）的配色。
- */
-export function applyThemeStyleClass(themeStyle: string) {
-  const root = document.documentElement
-  root.classList.forEach((cls) => {
-    if (cls.startsWith(THEME_CLASS_PREFIX)) {
-      root.classList.remove(cls)
-    }
-  })
-  if (themeStyle) {
-    root.classList.add(`${THEME_CLASS_PREFIX}${themeStyle}`)
-  }
-}
-
-/** 移除主题风格全局标记 */
-export function clearThemeStyleClass() {
-  applyThemeStyleClass("")
 }
 
 /**
@@ -152,19 +171,19 @@ export function clearThemeStyleClass() {
  */
 /** 确保顶部主题装饰栏存在（创建/复用，含滚动虚化监听） */
 function ensureThemeBar(codeBlock: HTMLElement): HTMLElement {
-  let bar = codeBlock.querySelector<HTMLElement>(`.${BAR_CLASS}`)
+  let bar = getOverlay(codeBlock).querySelector<HTMLElement>(`.${BAR_CLASS}`)
   if (!bar) {
     bar = document.createElement("div")
     bar.className = BAR_CLASS
     bar.setAttribute("contenteditable", "false")
-    codeBlock.appendChild(bar)
+    getOverlay(codeBlock).appendChild(bar)
     // 滚动查看时装饰栏与按钮虚化，停止滚动后恢复
     const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
     if (hljs) {
       let fadeTimer = 0
       hljs.addEventListener("scroll", () => {
         bar?.classList.add(BAR_SCROLLING_CLASS)
-        const b = codeBlock.querySelector<HTMLElement>(`.${BTN_CLASS}`)
+        const b = getOverlay(codeBlock).querySelector<HTMLElement>(`.${BTN_CLASS}`)
         b?.classList.add(BTN_SCROLLING_CLASS)
         window.clearTimeout(fadeTimer)
         fadeTimer = window.setTimeout(() => {
@@ -220,11 +239,8 @@ export function renderLongCodeBar(
       }
       applyFold(codeBlock, folded, folded ? topNHeight : 0)
       updateBtn(btn!, folded)
-      // 收起 / 展开后：移除魔法阵，触发重扫在「当前可视区域」重新生成
-      // （否则旧的魔法阵按展开时的高度分布，收起后会被裁剪、积压在固定行号处）
-      codeBlock.querySelectorAll(".cb-magic-circle").forEach((el) => el.remove())
     })
-    codeBlock.appendChild(btn)
+    getOverlay(codeBlock).appendChild(btn)
   }
   // 恢复折叠状态（data 属性持久化），高度：同阈值用缓存，阈值变化自动调整
   const folded = wasFolded
@@ -236,9 +252,62 @@ export function renderLongCodeBar(
 
 /** 完整清理长代码折叠（卸载时调用，恢复完整显示并清除状态） */
 export function clearLongCodeBar(codeBlock: HTMLElement) {
-  codeBlock.querySelector(`.${BAR_CLASS}`)?.remove()
-  codeBlock.querySelector(`.${BTN_CLASS}`)?.remove()
+  getOverlay(codeBlock).querySelector(`.${BAR_CLASS}`)?.remove()
+  getOverlay(codeBlock).querySelector(`.${BTN_CLASS}`)?.remove()
   applyFold(codeBlock, false, 0)
   delete codeBlock.dataset[FOLDED_ATTR]
   foldStates.delete(codeBlock)
 }
+
+/**
+ * 长代码条整体调度（linenumbers 渲染时调用一次，内部策略自管）：
+ * - 主题栏开关关闭 → 完整清理
+ * - 长代码 + 折叠开启 → 收起按钮 + 折叠态
+ * - 否则仅顶部主题装饰栏（短代码也显示装饰，无收起按钮）
+ */
+export function renderLongCodeSection(
+  codeBlock: HTMLElement,
+  hljs: HTMLElement,
+  settings: CodeBlockSettings,
+  text: string,
+  tops: number[],
+  heightAt: (i: number) => number,
+) {
+  const showTheme = settings.themeStyleEnabled && settings.themeStyle
+  if (!showTheme) {
+    clearLongCodeBar(codeBlock)
+    return
+  }
+  if (!settings.longCodeFold) {
+    renderThemeBar(codeBlock, settings.themeStyle)
+    return
+  }
+  const lineCount = countVisibleLines(text)
+  const n = settings.longCodeThreshold
+  if (lineCount <= n) {
+    renderThemeBar(codeBlock, settings.themeStyle)
+    return
+  }
+  const lastIdx = Math.min(n, tops.length) - 1
+  const hljsStyle = getComputedStyle(hljs)
+  const padBottom = Number.parseFloat(hljsStyle.paddingBottom) || 0
+  const borderV = (Number.parseFloat(hljsStyle.borderTopWidth) || 0)
+    + (Number.parseFloat(hljsStyle.borderBottomWidth) || 0)
+  const topNHeight = tops.length > 0 && lastIdx >= 0
+    ? tops[lastIdx] + heightAt(lastIdx) + padBottom + borderV
+    : 0
+  renderLongCodeBar(codeBlock, lineCount, n, topNHeight, settings.themeStyle)
+}
+
+registerDecor({
+  selfSelector: ".cb-longcode-bar, .cb-longcode-btn",
+  enhance: () => {
+    // 长代码条由行号渲染流程（renderLongCodeBar）触发，此处不重复执行
+  },
+  cleanup: (codeBlock, preserve) => {
+    if (!preserve) {
+      clearLongCodeBar(codeBlock)
+    }
+  },
+})
+

@@ -11,28 +11,29 @@ import type { FoldRegion } from "./fold"
 import type { FoldState } from "./folding"
 import type { CodeBlockSettings } from "./settings"
 import {
-  forEachTextNode,
   setScrollOffset,
 } from "../utils/dom"
+import { getOverlay } from "../utils/overlay"
 import { countVisibleLines } from "../utils/text-range"
 import { findFoldRegions } from "./fold"
 import {
   getCodeLines,
   getFoldState,
+  makeFoldBtn,
   pruneFoldStates,
-  toggleFold,
   unfoldAll,
 } from "./folding"
 import {
   renderIndentGuides,
-  syncIndentGuides,
 } from "./indent-guides"
 import { getCodeBlockLanguage } from "./language"
 import {
-  clearLongCodeBar,
-  renderLongCodeBar,
-  renderThemeBar,
-} from "./longcode"
+  computeVirtualWindow,
+  fallbackLineHeight,
+  measureLineElementTops,
+  measureLineTops,
+} from "./line-metrics"
+import { renderLongCodeSection } from "./longcode"
 import { registerRenderer } from "./registry"
 
 const LINENUMBERS_CLASS = "cb-linenumbers"
@@ -41,126 +42,12 @@ const LINENUMBERS_INNER_CLASS = "cb-linenumbers__inner"
 /** 行号列宽度公式中折叠槽位预留宽度（18px 按钮 + 间距） */
 const FOLD_SLOT_WIDTH = "1.6em"
 
-/** 回退行高：computed line-height（测量不可用时兜底） */
-function fallbackLineHeight(hljs: HTMLElement): number {
-  const cs = getComputedStyle(hljs)
-  const fontSize = Number.parseFloat(cs.fontSize) || 14
-  return cs.lineHeight === "normal"
-    ? fontSize * 1.6
-    : Number.parseFloat(cs.lineHeight) || fontSize * 1.6
-}
-
-/** 平均行间距：用相邻有效行的差值推算（含空行） */
-function computeAvgGap(tops: number[], lineCount: number): number {
-  const valid: number[] = []
-  for (let i = 0; i < lineCount; i++) {
-    if (tops[i] !== undefined) {
-      valid.push(i)
-    }
-  }
-  let sum = 0
-  let count = 0
-  for (let k = 1; k < valid.length; k++) {
-    const span = valid[k] - valid[k - 1]
-    if (span > 0) {
-      sum += (tops[valid[k]] - tops[valid[k - 1]]) / span
-      count++
-    }
-  }
-  return count ? sum / count : 0
-}
-
-/** 填充空行：用平均间距推算，并补齐到文本实际行数（尾部空行等） */
-function fillEmptyRows(tops: number[], lineCount: number, avgGap: number, hljs: HTMLElement) {
-  let lastKnownIdx = -1
-  let lastKnownTop = 0
-  for (let i = 0; i < lineCount; i++) {
-    if (tops[i] !== undefined) {
-      lastKnownIdx = i
-      lastKnownTop = tops[i]
-    } else if (avgGap > 0) {
-      tops[i] = lastKnownTop + (i - lastKnownIdx) * avgGap
-    } else {
-      tops[i] = lastKnownTop
-    }
-  }
-  const expected = countVisibleLines(hljs.textContent ?? "")
-  while (tops.length < expected) {
-    tops.push((tops.length > 0 ? tops[tops.length - 1] : 0) + (avgGap || fallbackLineHeight(hljs)))
-  }
-}
-
-/**
- * 逐行测量文本行顶部的 y 坐标（相对 .hljs 顶部，含 padding/border）。
- * 空行（无字符）用相邻行的平均间距推算。
- */
-function measureLineTops(hljs: HTMLElement): { tops: number[], avgGap: number } {
-  const tops: number[] = []
-  const hljsRect = hljs.getBoundingClientRect()
-  const range = document.createRange()
-  let lineNo = 0
-  let pendingTop: number | null = null
-  forEachTextNode(hljs, (node) => {
-    const data = node.data
-    for (let offset = 0; offset < data.length; offset++) {
-      if (data[offset] === "\n") {
-        if (pendingTop !== null) {
-          tops[lineNo] = pendingTop
-        }
-        lineNo++
-        pendingTop = null
-        continue
-      }
-      if (pendingTop === null) {
-        // 行首字符：测量其顶部
-        range.setStart(node, offset)
-        range.setEnd(node, offset + 1)
-        const rect = range.getBoundingClientRect()
-        if (rect.height > 0) {
-          pendingTop = rect.top - hljsRect.top
-        }
-      }
-    }
-  })
-  if (pendingTop !== null) {
-    tops[lineNo] = pendingTop
-    lineNo++
-  }
-
-  const avgGap = computeAvgGap(tops, lineNo)
-  fillEmptyRows(tops, lineNo, avgGap, hljs)
-  return {
-    tops,
-    avgGap,
-  }
-}
-
-/** 行元素模式：测量每个 .hljs-line 元素的顶部（相对 .hljs 顶部） */
-function measureLineElementTops(hljs: HTMLElement, lineEls: HTMLElement[]): number[] {
-  const hljsRect = hljs.getBoundingClientRect()
-  return lineEls.map((el) => el.getBoundingClientRect().top - hljsRect.top)
-}
-
-/** 折叠按钮（折叠态显示右箭头，否则下箭头），箭头用 CSS 三角形绘制 */
-function makeFoldBtn(codeBlock: HTMLElement, lineNo: number, folded: boolean): HTMLButtonElement {
-  const btn = document.createElement("button")
-  btn.type = "button"
-  btn.className = folded ? "cb-fold-btn cb-fold-btn--folded" : "cb-fold-btn"
-  btn.title = folded ? "展开代码块" : "折叠代码块"
-  btn.addEventListener("click", (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    toggleFold(codeBlock, lineNo)
-  })
-  return btn
-}
-
 /**
  * 为代码块注入行号列并渲染。
  * 幂等：已存在行号列时直接返回（verify 流程依赖此行为）。
  */
 export function renderLineNumbers(codeBlock: HTMLElement, settings: CodeBlockSettings) {
-  if (codeBlock.querySelector(`.${LINENUMBERS_CLASS}`)) {
+  if (getOverlay(codeBlock).querySelector(`.${LINENUMBERS_CLASS}`)) {
     return
   }
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
@@ -174,7 +61,7 @@ export function renderLineNumbers(codeBlock: HTMLElement, settings: CodeBlockSet
   const inner = document.createElement("div")
   inner.className = LINENUMBERS_INNER_CLASS
   linesEl.appendChild(inner)
-  codeBlock.appendChild(linesEl)
+  getOverlay(codeBlock).appendChild(linesEl)
 
   // 滚动同步：滚动始终发生在 .hljs（折叠时 .hljs 内部滚动预览）。
   // 行号列/缩进线固定在 .code-block 上，仅平移。
@@ -203,17 +90,18 @@ export function renderLineNumbers(codeBlock: HTMLElement, settings: CodeBlockSet
     if (!viewData) {
       return [-1, -1]
     }
-    if (viewData.folded || viewData.lineMode || viewData.total <= VIRTUALIZE_THRESHOLD) {
-      return [0, viewData.total - 1]
-    }
-    const viewH = codeBlock.clientHeight || 0
-    const st = hljs.scrollTop
     const avg = viewData.tops.length > 1
       ? (viewData.tops[viewData.tops.length - 1] - viewData.tops[0]) / Math.max(1, viewData.total - 1)
       : fallbackLineHeight(hljs)
-    const first = Math.max(0, Math.floor((st - VIEW_BUFFER * avg) / avg))
-    const last = Math.min(viewData.total - 1, Math.ceil((st + viewH + VIEW_BUFFER * avg) / avg))
-    return [first, last]
+    return computeVirtualWindow({
+      total: viewData.total,
+      scrollTop: hljs.scrollTop,
+      viewH: codeBlock.clientHeight || 0,
+      avgGap: avg,
+      threshold: VIRTUALIZE_THRESHOLD,
+      buffer: VIEW_BUFFER,
+      full: viewData.folded || viewData.lineMode,
+    })
   }
 
   /** 构造一个行号行：行号 + 折叠箭头槽位（VS Code 风格：箭头在行号和代码之间） */
@@ -246,7 +134,6 @@ export function renderLineNumbers(codeBlock: HTMLElement, settings: CodeBlockSet
   }
 
   /** 重建当前窗口的行号行（虚拟化核心） */
-  /** 行元素模式：class 隐藏/恢复（折叠态） */
   const renderLineModeRows = (frag: DocumentFragment, first: number, last: number) => {
     const { regionMap } = viewData!
     const lineEls = getCodeLines(hljs)
@@ -372,7 +259,7 @@ export function renderLineNumbers(codeBlock: HTMLElement, settings: CodeBlockSet
   const applyScroll = () => {
     const y = -hljs.scrollTop
     setScrollOffset(inner, y)
-    syncIndentGuides(codeBlock, hljs.scrollTop)
+    // 缩进线滚动自管（indent-guides 内部监听 hljs scroll）
     // 虚拟化：可视窗口变化时重建行号行
     if (viewData) {
       const [f, l] = computeWindow()
@@ -480,39 +367,11 @@ export function renderLineNumbers(codeBlock: HTMLElement, settings: CodeBlockSet
     if (!lineMode && settings.showIndentGuides) {
       renderIndentGuides(codeBlock, hljs, text, tops, heightAt, settings.rainbowIndent)
     } else {
-      codeBlock.querySelector(".cb-indent-guides")?.remove()
+      getOverlay(codeBlock).querySelector(".cb-indent-guides")?.remove()
     }
-    // 长代码折叠 + 顶部主题装饰栏（仅文本模式）。
-    // 短代码块也显示主题装饰（无收起按钮）；长代码才加收起/展开
+    // 长代码折叠 + 顶部主题装饰栏（仅文本模式）——策略在 longcode 模块内自管
     if (!lineMode) {
-      const showTheme = settings.themeStyleEnabled && settings.themeStyle
-      if (!showTheme) {
-        clearLongCodeBar(codeBlock)
-      } else if (settings.longCodeFold) {
-        const lineCount = countVisibleLines(text)
-        const n = settings.longCodeThreshold
-        if (lineCount > n) {
-          const lastIdx = Math.min(n, tops.length) - 1
-          const hljsStyle = getComputedStyle(hljs)
-          const padBottom = Number.parseFloat(hljsStyle.paddingBottom) || 0
-          const borderV = (Number.parseFloat(hljsStyle.borderTopWidth) || 0)
-            + (Number.parseFloat(hljsStyle.borderBottomWidth) || 0)
-          const topNHeight = tops.length > 0 && lastIdx >= 0
-            ? tops[lastIdx] + heightAt(lastIdx) + padBottom + borderV
-            : 0
-          renderLongCodeBar(
-            codeBlock,
-            lineCount,
-            n,
-            topNHeight,
-            settings.themeStyle,
-          )
-        } else {
-          renderThemeBar(codeBlock, settings.themeStyle)
-        }
-      } else {
-        renderThemeBar(codeBlock, settings.themeStyle)
-      }
+      renderLongCodeSection(codeBlock, hljs, settings, text, tops, heightAt)
     }
     // 行号列内容总高度（滚动同步时底部内容可显示）
     const lastTop = tops.length > 0 ? tops[tops.length - 1] : 0

@@ -4,6 +4,9 @@
  * 注意：思源文件 API 为 POST-only，getFile 需以 XHR 取 blob 后转 objectURL。
  */
 import { fetchSyncPost } from "siyuan"
+import {
+  registerDecor,
+} from "./registry"
 
 const STORAGE_DIR = "data/storage/petal/code-block-beautify"
 
@@ -115,3 +118,28 @@ function clearBackgroundImageUrl() {
     currentBgUrl = null
   }
 }
+
+/** CSS 纹理主题 class 列表（纯 CSS 纹理） */
+export const TEXTURE_CLASSES = ["grid", "dots", "matrix", "blueprint", "diagonal", "ripples", "checkerboard", "carbon", "aurora", "honeycomb", "barcode"].map((t) => `cb-bg-${t}`)
+
+/** 应用 CSS 背景纹理主题（通过 class 控制） */
+export function applyBackgroundTexture(codeBlock: HTMLElement, theme: string) {
+  codeBlock.classList.remove(...TEXTURE_CLASSES)
+  if (TEXTURE_CLASSES.includes(`cb-bg-${theme}`)) {
+    codeBlock.classList.add(`cb-bg-${theme}`)
+  }
+}
+
+registerDecor({
+  selfSelector: "",
+  enhance: ({
+    codeBlock,
+    settings,
+  }) => {
+    applyBackgroundTexture(codeBlock, settings.backgroundTheme)
+  },
+  cleanup: (codeBlock) => {
+    applyBackgroundTexture(codeBlock, "")
+  },
+})
+

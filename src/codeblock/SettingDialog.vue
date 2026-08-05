@@ -97,6 +97,20 @@
         </label>
         <span class="cb-setting__hint">不同缩进层级不同颜色</span>
       </div>
+      <div
+        v-if="form.showIndentGuides"
+        class="cb-setting__item fn__flex"
+      >
+        <span class="cb-setting__label">光标级别高亮</span>
+        <label class="fn__flex">
+          <input
+            v-model="form.activeGuideHighlight"
+            type="checkbox"
+            class="b3-switch fn__flex-center"
+          >
+        </label>
+        <span class="cb-setting__hint">光标所在缩进级别的竖线加深（VS Code 风格）</span>
+      </div>
       <div class="cb-setting__item fn__flex">
         <span class="cb-setting__label">缩进竖线颜色</span>
         <input
@@ -246,37 +260,38 @@
           <option value="">
             无
           </option>
-          <option value="magic-circle">
-            魔法阵
-          </option>
-          <option value="starfield">
-            星空
-          </option>
           <option value="grid">
             网格纸
           </option>
           <option value="dots">
             点阵
           </option>
-          <option value="matrix">
-            代码雨
+          <option value="blueprint">
+            蓝图
+          </option>
+          <option value="diagonal">
+            对角线
+          </option>
+          <option value="ripples">
+            涟漪
+          </option>
+          <option value="checkerboard">
+            棋盘格
+          </option>
+          <option value="carbon">
+            碳纤维
+          </option>
+          <option value="aurora">
+            极光
+          </option>
+          <option value="honeycomb">
+            蜂窝
+          </option>
+          <option value="barcode">
+            条形码
           </option>
         </select>
         <span class="cb-setting__hint">低透明度装饰，不影响代码阅读</span>
-      </div>
-      <div
-        v-if="form.backgroundTheme === 'magic-circle'"
-        class="cb-setting__item fn__flex"
-      >
-        <span class="cb-setting__label">卫星阵样式</span>
-        <label class="fn__flex">
-          <input
-            v-model="form.magicSatellite"
-            type="checkbox"
-            class="b3-switch fn__flex-center"
-          >
-        </label>
-        <span class="cb-setting__hint">主阵 + 3 个小阵环绕（重叠 ≤ 20%）</span>
       </div>
 
       <div class="fn__hr"></div>
@@ -470,6 +485,18 @@
           </option>
           <option value="chrome">
             Chrome 标签风格
+          </option>
+          <option value="terminal">
+            终端提示符
+          </option>
+          <option value="ekg">
+            心电图
+          </option>
+          <option value="codesym">
+            代码符号
+          </option>
+          <option value="pixel">
+            像素方块
           </option>
         </select>
       </div>
