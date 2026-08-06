@@ -225,40 +225,38 @@ function tickRing2(cx: number, cy: number, radius: number, count: number, innerF
 }
 
 /**
- * 新月形刻度轨道：单条三次贝塞尔 C 曲线（平滑弧带）。
- * 起点锁在右侧内环边缘 (0.6R,0)，终点精确锁定左下偏心圆顶部外边缘。
- * 偏心圆中心 (-0.35R,0.25R) 半径 0.24R → 顶部外边缘 = (-0.35R, 0.01R)。
+ * 新月形刻度轨道：以偏心圆中心为圆心的两条平行圆弧（A 指令）边界 + 中间垂直刻度。
+ * 轨道与左下偏心圆同心（圆心 -0.35R,0.25R），从右侧向右下扫过，衔接偏心圆。
+ * 轨道最右点 -0.35R+0.30R=0.05R < 0.6R（不超过五角星外大内环）。
  */
 function crescentTrack(r: number): string {
   const parts: string[] = []
-  const sx = 0.6 * r
-  const sy = 0
-  // 偏心圆顶部外边缘（精确锁定）
-  const ex = -0.35 * r
-  const ey = 0.25 * r - 0.24 * r
-  // 三次贝塞尔控制点：C1 向右下推，C2 在中间偏右下（避免平直段，曲线更圆润）
-  const c1x = 0.6 * r
-  const c1y = 0.42 * r
-  const c2x = 0.1 * r
-  const c2y = 0.42 * r
-  // 外弧：单条 C 曲线（连续平滑）
-  parts.push(`<path d="M ${sx.toFixed(1)} ${sy.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.5" stroke-linecap="round"/>`)
-  // 内弧（向曲线内侧偏移 0.06R）
-  const off = 0.06 * r
-  parts.push(`<path d="M ${(sx - off * 0.5).toFixed(1)} ${(sy + off * 0.5).toFixed(1)} C ${(c1x - off * 0.6).toFixed(1)} ${(c1y - off * 0.4).toFixed(1)} ${(c2x + off * 0.6).toFixed(1)} ${(c2y - off * 0.4).toFixed(1)} ${(ex + off * 0.5).toFixed(1)} ${(ey + off * 0.5).toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.2" opacity="0.8" stroke-linecap="round"/>`)
-  // 轨道齿痕：沿三次贝塞尔真实采样（切线法线，细短线，不产生阶梯感）
-  for (let i = 0; i <= 23; i++) {
-    const t = i / 23
-    const mt = 1 - t
-    const bx = mt * mt * mt * sx + 3 * mt * mt * t * c1x + 3 * mt * t * t * c2x + t * t * t * ex
-    const by = mt * mt * mt * sy + 3 * mt * mt * t * c1y + 3 * mt * t * t * c2y + t * t * t * ey
-    const dx = 3 * mt * mt * (c1x - sx) + 6 * mt * t * (c2x - c1x) + 3 * t * t * (ex - c2x)
-    const dy = 3 * mt * mt * (c1y - sy) + 6 * mt * t * (c2y - c1y) + 3 * t * t * (ey - c2y)
-    const len = Math.hypot(dx, dy) || 1
-    const nx = -dy / len
-    const ny = dx / len
-    const hl = 0.03 * r
-    parts.push(line(bx - nx * hl, by - ny * hl, bx + nx * hl, by + ny * hl, 1, 0.6))
+  // 轨道圆心 = 偏心圆中心（同心，自然衔接）
+  const cx = -0.35 * r
+  const cy = 0.25 * r
+  // 外边界半径 0.30R，内边界半径 0.24R（轨道带 0.06R 宽）
+  const outerR = 0.30 * r
+  const innerR = 0.24 * r
+  // 弧段角度：从右侧 20° 扫到左侧 170°（顺时针，覆盖右下大半圈）
+  const startDeg = 20
+  const endDeg = 170
+  const toXY = (rad: number, deg: number): [number, number] => {
+    const a = (deg * Math.PI) / 180
+    return [cx + rad * Math.cos(a), cy + rad * Math.sin(a)]
+  }
+  const [ox0, oy0] = toXY(outerR, startDeg)
+  const [ox1, oy1] = toXY(outerR, endDeg)
+  const [ix0, iy0] = toXY(innerR, startDeg)
+  const [ix1, iy1] = toXY(innerR, endDeg)
+  // 外边界弧（大弧 large-arc=1）
+  parts.push(`<path d="M ${ox0.toFixed(1)} ${oy0.toFixed(1)} A ${outerR.toFixed(1)} ${outerR.toFixed(1)} 0 1 1 ${ox1.toFixed(1)} ${oy1.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.5" stroke-linecap="round"/>`)
+  // 内边界弧（大弧）
+  parts.push(`<path d="M ${ix0.toFixed(1)} ${iy0.toFixed(1)} A ${innerR.toFixed(1)} ${innerR.toFixed(1)} 0 1 1 ${ix1.toFixed(1)} ${iy1.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.2" opacity="0.8" stroke-linecap="round"/>`)
+  // 垂直刻度：沿径向（内边界→外边界），每 6° 一条
+  for (let deg = startDeg; deg <= endDeg; deg += 6) {
+    const [ix, iy] = toXY(innerR, deg)
+    const [ox, oy] = toXY(outerR, deg)
+    parts.push(line(ix, iy, ox, oy, 1, 0.6))
   }
   return parts.join("\n    ")
 }
