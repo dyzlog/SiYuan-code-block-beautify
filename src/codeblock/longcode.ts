@@ -46,9 +46,13 @@ function applyFold(codeBlock: HTMLElement, folded: boolean, topNHeight: number) 
   if (folded && topNHeight > 0) {
     if (hljs) {
       hljs.style.maxHeight = `${topNHeight}px`
+      // 第一行居中：加 padding-top = 视口高/2，使首行内容落在可视区中间
+      // （padding 属于可滚动内容，滚动预览不受影响；展开时移除恢复原样）
+      hljs.style.paddingTop = `${Math.floor(topNHeight / 2)}px`
     }
   } else if (hljs) {
     hljs.style.maxHeight = ""
+    hljs.style.paddingTop = ""
   }
 }
 
