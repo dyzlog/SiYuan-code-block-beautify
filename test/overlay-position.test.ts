@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 /**
- * overlay 定位回归测试：静态位置缓存方案。
- * transform = blockRect(当前) - staticRect(创建时记录的初始视口位置)。
- * 滚动时两者同步变化 → 差值恒定 → transform 不变 → overlay 随内容滚动。
+ * overlay 定位回归测试：锚定 .protyle-wysiwyg 方案。
+ * transform = codeBlock 相对 wysiwyg 的偏移（滚动时不变，原生跟随）；
+ * onScroll 只更新 clip 裁剪。
  */
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 
 if (!("ResizeObserver" in window)) {
   window.ResizeObserver = class {
@@ -56,13 +56,13 @@ function buildEditor(): { code: HTMLElement; ov: HTMLElement } {
   protyle.appendChild(content)
   document.body.appendChild(protyle)
 
-  // mock 初始位置：protyle 在 (0,0)，codeBlock 在 (100, 200)，overlay 静态在 (0,0)
+  // mock：wysiwyg 在 (0,0)，codeBlock 在 (100, 200)（相对 wysiwyg 的偏移）
   protyle.getBoundingClientRect = () => makeRect(0, 0, 800, 600)
   content.getBoundingClientRect = () => makeRect(0, 0, 800, 600)
+  wysiwyg.getBoundingClientRect = () => makeRect(0, 0, 800, 600)
   code.getBoundingClientRect = () => makeRect(100, 200, 400, 120)
 
   const ov = getOverlay(code)
-  // 创建时静态位置：overlay 在 (0,0)（absolute left:0 top:0 相对 .protyle）
   return { code, ov }
 }
 
@@ -74,10 +74,10 @@ function transformOf(ov: HTMLElement): { x: number; y: number } | null {
   return { x: Number.parseFloat(m[1]), y: Number.parseFloat(m[2]) }
 }
 
-describe("overlay 静态位置定位", () => {
-  it("transform = blockRect - staticRect（首次定位正确）", () => {
-    const { code, ov } = buildEditor()
-    // 创建时 staticRect = (0,0)，blockRect = (100,200) → transform = (100, 200)
+describe("overlay 锚定 wysiwyg 定位", () => {
+  it("transform = codeBlock 相对 wysiwyg 的偏移（首次定位正确）", () => {
+    const { ov } = buildEditor()
+    // wysiwyg 在 (0,0)，codeBlock 在 (100,200) → transform = (100, 200)
     const t = transformOf(ov)
     expect(t).not.toBeNull()
     expect(t!.x).toBe(100)
@@ -85,24 +85,28 @@ describe("overlay 静态位置定位", () => {
     document.body.innerHTML = ""
   })
 
-  it("滚动后（blockRect 变化、staticRect 不变）transform 更新跟随", async () => {
+  it("滚动后（两者一起移动）transform 不变——原生跟随，无浮动", async () => {
     const { code, ov } = buildEditor()
-    // 滚动后 codeBlock 上移到 (100, 50)
+    // 滚动后 wysiwyg 和 codeBlock 一起上移 150px（视口坐标同步变化）
+    const wysiwyg = code.parentElement!
+    wysiwyg.getBoundingClientRect = () => makeRect(0, -150, 800, 600)
     code.getBoundingClientRect = () => makeRect(100, 50, 400, 120)
-    // 真实滚动走 onScroll（直接 applyGeom，不经 syncOverlay 帧去重）
-    // 模拟：等一帧让 WeakSet 去重恢复，再 getOverlay 触发 syncOverlay
+    // 触发同步（真实滚动走 onScroll 只更新 clip，不更新 transform）
     await new Promise((r) => setTimeout(r, 20))
     getOverlay(code)
     const t = transformOf(ov)
     expect(t).not.toBeNull()
-    expect(t!.y).toBe(50)
+    // transform 保持不变（相对 wysiwyg 偏移恒定）→ 零浮动
+    expect(t!.y).toBe(200)
     document.body.innerHTML = ""
   })
 
-  it("overlay 与 codeBlock 是兄弟节点", () => {
+  it("overlay 与 codeBlock 是兄弟节点，wysiwyg 获得 position: relative", () => {
     const { code, ov } = buildEditor()
     expect(ov.parentElement).toBe(code.parentElement)
     expect(ov.previousElementSibling).toBe(code)
+    const wysiwyg = code.parentElement!
+    expect(wysiwyg.style.position).toBe("relative")
     document.body.innerHTML = ""
   })
 })

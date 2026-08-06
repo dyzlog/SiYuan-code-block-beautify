@@ -6,19 +6,17 @@
  * 否则思源序列化代码块内容（updateTransaction 读 element.outerHTML）时
  * 会把装饰 DOM 写进文档，永久污染用户代码。
  *
- * 定位方案：position: absolute + 相对 offsetParent 的视口差值。
- * - overlay 与 codeBlock 同父，offsetParent 均为 .protyle（position: relative），
- *   坐标 = 两者视口位置差值
- * - 滚动同步：在 scroll 事件内「同步」更新（scroll 事件在当前帧绘制前触发，
- *   与代码块同帧绘制 → 无 rAF 一帧滞后，快速滚动不分离）；
- *   先批量读 rect 再批量写样式，避免逐块强制回流；
- *   跳过远离视口的块（clip 已隐藏，滚近时 scroll 事件再触发）
- * - 同生共死：CSS overflow 无法裁剪 overlay（containing block 在滚动容器外），
- *   用 clip-path: inset() 精确裁剪到与代码块相同的可视区；
+ * 定位方案：position: absolute + 锚定 .protyle-wysiwyg（滚动内容）。
+ * - 给 .protyle-wysiwyg 加 position: relative（仅一个声明，已验证不影响
+ *   思源内部任何 absolute 子元素：块标是 fixed、块内元素锚定块自身、
+ *   伪元素锚定主体），overlay 的 offsetParent 变为 wysiwyg
+ * - 滚动时 overlay 作为 wysiwyg 内元素随内容「浏览器原生跟随」——
+ *   onScroll 只做 clip-path 裁剪与可见性，不更新 transform（零浮动）
+ * - transform 仅在布局变化（ResizeObserver：增删/折叠/懒加载）时更新
+ * - 同生共死：clip-path: inset() 裁剪到与代码块相同的可视区；
  *   完全滚出时 visibility: hidden
  * - z-index: 1（思源 dialog 用 ++window.siyuan.zIndex 动态递增、从 10 起步，
  *   永远高于 1，因此 overlay 绝不会穿透 dialog/menu）
- * - 不修改任何祖先元素的样式（避免破坏思源原生布局）
  * - ResizeObserver 跟随尺寸变化（折叠/编辑导致的行高变化）
  */
 const overlayMap = new WeakMap<HTMLElement, HTMLElement>()
@@ -26,8 +24,8 @@ const overlayMap = new WeakMap<HTMLElement, HTMLElement>()
 const scrollerMap = new WeakMap<HTMLElement, HTMLElement | null>()
 /** 活跃的 codeBlock 集合（WeakMap 不可遍历，滚动/清理时需要遍历） */
 const activeBlocks = new Set<HTMLElement>()
-/** overlay 的静态视口位置缓存（创建时记录，transform 前的位置，供定位基准） */
-const staticPositions = new WeakMap<HTMLElement, {
+/** overlay 相对锚定容器的偏移（布局变化时重算；滚动时不变，原生跟随） */
+const staticOffsets = new WeakMap<HTMLElement, {
   left: number
   top: number
 }>()
@@ -104,19 +102,17 @@ function applyGeom(codeBlock: HTMLElement, ov: HTMLElement, g: OverlayGeom) {
     blockRect,
     scrollerRect,
   } = g
-  // 位置：transform 相对 overlay 的「静态位置」（创建时记录的初始视口坐标）。
-  // 用 blockRect - staticRect：两者都是视口坐标，滚动时同步变化，
-  // 差值 = codeBlock 相对 overlay 静态位置的偏移（恒定）→ transform 不变，
-  // overlay 随内容滚动天然跟随。静态位置缓存避免「当前 ovRect 自指」错乱，
-  // 也不依赖 offsetParent 一致性（offsetTop 差值在列表/嵌套块下坐标系不同会乱位）。
-  const staticRect = staticPositions.get(ov)
+  // 位置：overlay 锚定 .protyle-wysiwyg（滚动内容），transform 表达
+  // codeBlock 相对锚定容器的偏移——滚动时该偏移不变（overlay 与 codeBlock
+  // 一起随内容原生移动），transform 无需更新 → 零浮动零计算。
+  const offset = staticOffsets.get(ov)
   let x = 0
   let y = 0
-  if (staticRect) {
-    x = blockRect.left - staticRect.left
-    y = blockRect.top - staticRect.top
+  if (offset) {
+    x = offset.left
+    y = offset.top
   } else {
-    // 无静态位置缓存（理论上 getOverlay 创建时必缓存）：退化为相对父容器
+    // 无缓存（理论上 getOverlay 创建时必缓存）：退化为相对父容器
     x = codeBlock.offsetLeft - ov.offsetLeft
     y = codeBlock.offsetTop - ov.offsetTop
   }
@@ -127,7 +123,7 @@ function applyGeom(codeBlock: HTMLElement, ov: HTMLElement, g: OverlayGeom) {
   // 尺寸：transform 不改变布局尺寸，width/height 仍需真实值（内部元素绝对定位依赖）
   setStyle(ov, "width", `${blockRect.width}px`)
   setStyle(ov, "height", `${blockRect.height}px`)
-  // 同生共死：裁剪到与代码块相同的可视区
+  // 同生共死：裁剪到与代码块相同的可视区（滚动时随视口坐标更新）
   if (!scrollerRect) {
     setStyle(ov, "clipPath", "")
     setStyle(ov, "visibility", "")
@@ -176,6 +172,16 @@ function syncOverlay(codeBlock: HTMLElement, ov: HTMLElement) {
     requestAnimationFrame(() => {
       syncFrameScheduled = false
       syncedThisFrame = new WeakSet<HTMLElement>()
+    })
+  }
+  // 布局变化（ResizeObserver 触发）时重算 codeBlock 相对锚定容器的偏移
+  const anchor = codeBlock.closest<HTMLElement>(".protyle-wysiwyg")
+  if (anchor) {
+    const parentRect = anchor.getBoundingClientRect()
+    const blockRect = codeBlock.getBoundingClientRect()
+    staticOffsets.set(ov, {
+      left: blockRect.left - parentRect.left,
+      top: blockRect.top - parentRect.top,
     })
   }
   applyGeom(codeBlock, ov, readGeom(codeBlock))
@@ -293,11 +299,19 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
     overlayMap.set(codeBlock, ov)
     activeBlocks.add(codeBlock)
     scrollerMap.set(codeBlock, codeBlock.closest<HTMLElement>(".protyle-content"))
-    // 记录静态位置（此刻无 transform，getBoundingClientRect = 初始视口坐标）
-    const staticRect = ov.getBoundingClientRect()
-    staticPositions.set(ov, {
-      left: staticRect.left,
-      top: staticRect.top,
+    // 锚定 .protyle-wysiwyg（滚动内容）：加 position: relative 使 overlay
+    // 的 offsetParent 变为 wysiwyg → 滚动时 overlay 随内容原生跟随。
+    // 已验证不影响思源内部 absolute 子元素（块标 fixed、块内锚定块自身）。
+    const anchor = codeBlock.closest<HTMLElement>(".protyle-wysiwyg")
+    if (anchor && !anchor.style.position) {
+      anchor.style.position = "relative"
+    }
+    // 记录 codeBlock 相对锚定容器的偏移（滚动时恒定，transform 基准）
+    const parentRect = anchor ? anchor.getBoundingClientRect() : null
+    const blockRect = codeBlock.getBoundingClientRect()
+    staticOffsets.set(ov, {
+      left: parentRect ? blockRect.left - parentRect.left : 0,
+      top: parentRect ? blockRect.top - parentRect.top : 0,
     })
     ensureWheelForward(codeBlock, ov)
     // 位置/尺寸变化自动跟随：共享 ResizeObserver 观察该块（布局变化时重新定位）
