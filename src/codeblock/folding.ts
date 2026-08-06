@@ -38,9 +38,7 @@ interface FoldAreaState {
 }
 
 export interface FoldState {
-  /** 折叠前检测到的全部区域（含已折叠与未折叠），供多区域折叠与渲染 */
-  regions: FoldRegion[]
-  /** 已折叠的区域 */
+  /** 已折叠的区域（省略行承载展开入口，DOM 即状态） */
   areas: FoldAreaState[]
 }
 
@@ -143,22 +141,16 @@ function toggleFoldByClass(hljs: HTMLElement, lineEls: HTMLElement[], startLine:
 
 /** 文本模式：Range 提取/恢复 */
 function toggleFoldByText(codeBlock: HTMLElement, hljs: HTMLElement, startLine: number, language: string) {
-  const state = foldStates.get(codeBlock)
-  const existing = state?.areas.find((a) => a.start === startLine)
-  if (existing && state) {
-    unfoldTextArea(codeBlock, hljs, existing, state)
-    return
-  }
+  // 方案A：DOM 即状态——始终基于当前文本重新解析区域。
+  // 已折叠区域由省略行承载展开（不走此路径），这里只处理「折叠新区域」
   const text = getCodeText(hljs)
-  // 优先使用折叠前记录的区域（折叠态下文本已变化，不能重新解析）
-  const region = state?.regions.find((r) => r.start === startLine)
-    ?? findFoldRegions(text, language).find((r) => r.start === startLine)
+  const region = findFoldRegions(text, language).find((r) => r.start === startLine)
   if (region) {
-    foldTextArea(codeBlock, hljs, region, language)
+    foldTextArea(codeBlock, hljs, region)
   }
 }
 
-function foldTextArea(codeBlock: HTMLElement, hljs: HTMLElement, region: FoldRegion, language: string) {
+function foldTextArea(codeBlock: HTMLElement, hljs: HTMLElement, region: FoldRegion) {
   let state = foldStates.get(codeBlock)
   // 目标区域内若已有折叠区域（嵌套折叠），先展开它们再折叠外层，
   // 否则外层 extractContents 会把内层省略行一并提取走，导致内容错乱
@@ -173,26 +165,14 @@ function foldTextArea(codeBlock: HTMLElement, hljs: HTMLElement, region: FoldReg
     }
     state = foldStates.get(codeBlock)
   }
-  // 换算为当前文本行号：前面已折叠的区域会占走行（原始行号 → 当前行号）
-  let shift = 0
-  if (state) {
-    for (const a of state.areas) {
-      if (a.end < region.start) {
-        shift += a.end - a.start
-      }
-    }
-  }
-  const curRegion: FoldRegion = {
-    start: region.start - shift,
-    end: region.end - shift,
-  }
+  // 方案A：region 来自当前文本解析，即当前 DOM 行号，无需原始↔当前换算
   const text = getCodeText(hljs)
   const starts = getLineStarts(text)
-  const startOff = starts[curRegion.start + 1]
+  const startOff = starts[region.start + 1]
   if (startOff === undefined) {
     return
   }
-  const endOff = curRegion.end + 1 < starts.length ? starts[curRegion.end + 1] : text.length
+  const endOff = region.end + 1 < starts.length ? starts[region.end + 1] : text.length
   if (startOff >= endOff) {
     return
   }
@@ -205,14 +185,22 @@ function foldTextArea(codeBlock: HTMLElement, hljs: HTMLElement, region: FoldReg
   ellipsis.addEventListener("click", (e) => {
     e.preventDefault()
     e.stopPropagation()
-    toggleFold(codeBlock, region.start)
+    // 方案A：省略行即展开入口（DOM 即状态）——直接展开本区域，不依赖行号
+    const s = foldStates.get(codeBlock)
+    if (!s) {
+      return
+    }
+    const area = s.areas.find((a) => a.ellipsis === ellipsis)
+    if (area) {
+      unfoldTextArea(codeBlock, hljs, area, s)
+      rerenderBlock(codeBlock)
+    }
   })
   range.insertNode(ellipsis)
 
   if (!state) {
-    // 首次折叠时记录折叠前的完整区域列表，供多区域折叠与渲染
+    // 首次折叠时记录折叠状态（areas 由后续 push 填充）
     foldStates.set(codeBlock, {
-      regions: findFoldRegions(text, language),
       areas: [],
     })
   }

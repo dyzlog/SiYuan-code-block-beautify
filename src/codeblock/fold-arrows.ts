@@ -92,7 +92,11 @@ function renderFoldArrows(
   }
   for (let i = 0; i < regions.length; i++) {
     const region = regions[i]
-    const btn = makeFoldBtn(codeBlock, region.start, foldedStarts.has(region.start))
+    // 方案A：已折叠区域由省略行承载展开入口，行号列不再渲染箭头
+    if (foldedStarts.has(region.start)) {
+      continue
+    }
+    const btn = makeFoldBtn(codeBlock, region.start, false)
     btn.className = `${btn.className} ${ARROW_CLASS}`
     const top = i === 0
       ? firstTop
