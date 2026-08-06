@@ -72,17 +72,8 @@
           <option value="dashed">
             虚线
           </option>
-          <option value="glass">
-            毛玻璃
-          </option>
           <option value="handdrawn">
             手绘感
-          </option>
-          <option value="baroque">
-            巴洛克
-          </option>
-          <option value="european">
-            欧式
           </option>
         </select>
       </div>

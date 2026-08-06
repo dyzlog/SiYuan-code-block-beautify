@@ -12,7 +12,7 @@ export interface CodeBlockSettings {
   borderWidth: number
   /** 边框颜色（CSS 颜色值，空 = 跟随主题） */
   borderColor: string
-  /** 边框样式（none/solid/pixel/dashed/glass/handdrawn/baroque/european） */
+  /** 边框样式（none/solid/pixel/dashed/handdrawn） */
   borderStyle: string
   /** 代码块背景颜色（CSS 颜色值，空 = 跟随主题） */
   backgroundColor: string
@@ -114,7 +114,7 @@ export function applySettingsVars(s: CodeBlockSettings) {
       : `inset 0 ${-s.shadowSize}px ${-s.shadowSize * 2}px rgba(0, 0, 0, 0.3), inset 0 ${-Math.max(2, -s.shadowSize / 2)}px ${-s.shadowSize}px rgba(0, 0, 0, 0.1)`
   root.style.setProperty("--cb-shadow", shadow)
   // 边框样式 class：移除旧样式，应用新样式（solid 为默认无 class）
-  const BORDER_STYLES = ["solid", "pixel", "dashed", "glass", "handdrawn", "baroque", "european"]
+  const BORDER_STYLES = ["solid", "pixel", "dashed", "handdrawn"]
   document.querySelectorAll<HTMLElement>(".code-block.cb-beautified").forEach((el) => {
     el.classList.remove(...BORDER_STYLES.map((st) => `cb-border-${st}`))
     if (s.borderStyle && s.borderStyle !== "solid") {
