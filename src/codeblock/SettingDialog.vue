@@ -236,6 +236,9 @@
           <option value="graph">
             小方格纸
           </option>
+          <option value="sakura">
+            魔卡小樱魔法阵
+          </option>
         </select>
         <span class="cb-setting__hint">低透明度装饰，不影响代码阅读</span>
       </div>

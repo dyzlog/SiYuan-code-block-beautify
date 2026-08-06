@@ -7,6 +7,7 @@ import { fetchSyncPost } from "siyuan"
 import {
   registerDecor,
 } from "./registry"
+import { buildSakuraBg } from "./sakura-bg"
 
 const STORAGE_DIR = "data/storage/petal/code-block-beautify"
 
@@ -119,7 +120,10 @@ function clearBackgroundImageUrl() {
   }
 }
 
-/** CSS 纹理主题 class 列表（须与 codeblock.scss 中 .cb-bg-* 定义一致） */
+/**
+ * CSS 纹理主题 class 列表（须与 codeblock.scss 中 .cb-bg-* 定义一致）。
+ * sakura 为 SVG 背景主题（非 CSS 纹理），单独处理。
+ */
 export const TEXTURE_CLASSES = [
   "grid",
   "dots",
@@ -132,6 +136,9 @@ export const TEXTURE_CLASSES = [
   "carbon",
   "graph",
 ].map((t) => `cb-bg-${t}`)
+
+/** SVG 背景主题（用 buildSakuraBg 生成 data URI 作 background-image） */
+const SVG_BG_THEMES = new Set(["sakura"])
 
 /** 背景纹理主题 class 前缀 */
 const BG_CLASS_PREFIX = "cb-bg-"
@@ -170,13 +177,25 @@ function ensureTextureStyle(theme: string) {
 }
 
 /**
- * 应用 CSS 背景纹理主题（通过 class 控制）：
- * 只移除上一次应用的主题 class（用 data 属性记录），不每次 remove 全部纹理 class。
+ * 应用背景主题：CSS 纹理走 class 注入；SVG 主题（sakura）走内联 background-image。
+ * 只移除上一次应用的主题（用 data 属性记录），不每次 remove 全部主题。
  */
 function applyBackgroundTexture(codeBlock: HTMLElement, theme: string) {
   const prev = codeBlock.dataset.cbBgTheme
   if (prev && prev !== theme) {
     codeBlock.classList.remove(`${BG_CLASS_PREFIX}${prev}`)
+    // 清理 SVG 主题的内联背景
+    codeBlock.style.backgroundImage = ""
+    codeBlock.style.backgroundSize = ""
+    codeBlock.style.backgroundPosition = ""
+  }
+  if (SVG_BG_THEMES.has(theme)) {
+    // SVG 背景主题：生成 data URI 内联（静态发光魔法阵，不旋转）
+    codeBlock.style.backgroundImage = `url("${buildSakuraBg()}")`
+    codeBlock.style.backgroundSize = "cover"
+    codeBlock.style.backgroundPosition = "center"
+    codeBlock.dataset.cbBgTheme = theme
+    return
   }
   const nextClass = `${BG_CLASS_PREFIX}${theme}`
   if (TEXTURE_CLASSES.includes(nextClass)) {
