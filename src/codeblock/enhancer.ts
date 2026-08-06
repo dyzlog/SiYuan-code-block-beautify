@@ -112,7 +112,7 @@ export function initCodeBlockEnhancer(p: Plugin, s: CodeBlockSettings) {
         continue
       }
       // 代码块被删除：移除兄弟 overlay（关键：overlay 是 codeBlock 的兄弟节点，不随其移除，
-      // 思源动态加载移除 .code-block 时会残留在 wysiwyg 中，fixed 定位停驻视口持续显示）
+      // 思源动态加载移除 .code-block 时会残留在 wysiwyg 中持续显示）
       for (const node of m.removedNodes) {
         if (node.nodeType !== ELEMENT_NODE) {
           continue
@@ -244,8 +244,7 @@ function scan(scope: "pending" | "all" = "all") {
   // 全量扫描（文档切换 / 初始化 / 设置变更）
   pendingBlocks.clear()
   // 兜底：清理与代码块失联的孤儿 overlay（removedNodes 已做清理，这里是最后防线，
-  // 覆盖代码块被移动/替换等 MutationObserver 未捕获的边角场景——overlay 固定定位，
-  // 失联后会停驻在视口内持续显示）
+  // 覆盖代码块被移动/替换等 MutationObserver 未捕获的边角场景）
   document.querySelectorAll<HTMLElement>(".cb-overlay").forEach((ov) => {
     if (!ov.previousElementSibling?.matches(CODE_BLOCK_SELECTOR)) {
       ov.remove()

@@ -44,19 +44,15 @@ function getArrowsLayer(codeBlock: HTMLElement): HTMLElement {
 
 /**
  * 渲染折叠箭头（幂等：先清空再渲染，随代码块内容/语言变化刷新）。
- * 定位：折叠区域起点行的 y = 行号 × 行高（等高模式）。
+ * 定位：measureLineAt 精确测量 + 前两区域等差推算（思源代码块等高行）。
  */
 function renderFoldArrows(
   codeBlock: HTMLElement,
   hljs: HTMLElement,
   text: string,
-  enabled: boolean,
 ) {
   const layer = getArrowsLayer(codeBlock)
   layer.textContent = ""
-  if (!enabled) {
-    return
-  }
   const language = getCodeBlockLanguage(codeBlock)
   const regions = findFoldRegions(text, language)
   if (regions.length === 0) {
@@ -77,15 +73,11 @@ function renderFoldArrows(
   registerRenderer(codeBlock, () => refreshFoldArrows(codeBlock))
   // 定位：只精确测量前两个区域，推算等行高（思源代码块等高行），
   // 其余区域用等差推算——避免每区域一次 Range 测量（reflow），N 次 → 2 次
-  const regionsTop = regions.length
-  let firstTop = 0
+  const firstTop = measureLineAt(hljs, text, regions[0].start).top
   let stride = 0
-  if (regionsTop > 0) {
-    firstTop = measureLineAt(hljs, text, regions[0].start).top
-    if (regionsTop > 1 && regions[1].start > regions[0].start) {
-      const secondTop = measureLineAt(hljs, text, regions[1].start).top
-      stride = (secondTop - firstTop) / (regions[1].start - regions[0].start)
-    }
+  if (regions.length > 1 && regions[1].start > regions[0].start) {
+    const secondTop = measureLineAt(hljs, text, regions[1].start).top
+    stride = (secondTop - firstTop) / (regions[1].start - regions[0].start)
   }
   for (let i = 0; i < regions.length; i++) {
     const region = regions[i]
@@ -122,7 +114,7 @@ function refreshFoldArrows(codeBlock: HTMLElement) {
   if (!ensureEnhanced(codeBlock)) {
     return
   }
-  renderFoldArrows(codeBlock, hljs, getCodeText(hljs), true)
+  renderFoldArrows(codeBlock, hljs, getCodeText(hljs))
 }
 
 registerDecor({
@@ -130,7 +122,7 @@ registerDecor({
   enhance: (ctx) => {
     // 代码块增强时渲染折叠箭头（幂等：renderFoldArrows 先清空再渲染）
     if (ctx.hljs && ctx.settings.foldEnabled) {
-      renderFoldArrows(ctx.codeBlock, ctx.hljs, getCodeText(ctx.hljs), true)
+      renderFoldArrows(ctx.codeBlock, ctx.hljs, getCodeText(ctx.hljs))
     }
   },
   cleanup: (codeBlock) => {

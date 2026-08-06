@@ -8,6 +8,7 @@
  * 新增装饰功能 = 新建模块文件 + 底部 registerDecor 一行，enhancer 零改动。
  */
 import type { CodeBlockSettings } from "./settings"
+import { ENHANCED_VALUE } from "../utils/dom"
 
 export interface DecorContext {
   codeBlock: HTMLElement
@@ -101,7 +102,7 @@ export function setEnhanceBlock(fn: (codeBlock: HTMLElement) => void): void {
  * 或增强入口未注入），调用方应跳过本地渲染避免重复。
  */
 export function ensureEnhanced(codeBlock: HTMLElement): boolean {
-  if (codeBlock.dataset.cbEnhanced === "1") {
+  if (codeBlock.dataset.cbEnhanced === ENHANCED_VALUE) {
     return true
   }
   if (enhanceBlockFn) {

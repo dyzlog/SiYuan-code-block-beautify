@@ -13,7 +13,6 @@ import {
   getCodeText,
 } from "../utils/dom"
 import {
-  countVisibleLines,
   getLineStarts,
   makeRange,
 } from "../utils/text-range"
@@ -39,8 +38,6 @@ interface FoldAreaState {
 }
 
 export interface FoldState {
-  /** 折叠前总行数 */
-  origTotal: number
   /** 折叠前检测到的全部区域（含已折叠与未折叠），供多区域折叠与渲染 */
   regions: FoldRegion[]
   /** 已折叠的区域 */
@@ -215,7 +212,6 @@ function foldTextArea(codeBlock: HTMLElement, hljs: HTMLElement, region: FoldReg
   if (!state) {
     // 首次折叠时记录折叠前的完整区域列表，供多区域折叠与渲染
     foldStates.set(codeBlock, {
-      origTotal: countVisibleLines(text),
       regions: findFoldRegions(text, language),
       areas: [],
     })

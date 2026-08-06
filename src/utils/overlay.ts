@@ -65,9 +65,9 @@ function ensureSharedResizeObserver() {
 function observeBlockResize(codeBlock: HTMLElement) {
   ensureSharedResizeObserver()
   sharedResizeObserver?.observe(codeBlock)
-  // 观察父容器：上方内容增删/折叠/懒加载导致块位置变化时，刷新 offsetTop 缓存
+  // 观察父容器：上方内容增删/折叠/懒加载导致块位置变化时重新定位
   const parent = codeBlock.parentElement
-  if (parent && !parent.classList.contains("cb-overlay")) {
+  if (parent) {
     sharedResizeObserver?.observe(parent)
   }
 }

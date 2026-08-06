@@ -259,7 +259,7 @@ function clearLongCodeBar(codeBlock: HTMLElement) {
  * - 长代码 + 折叠开启 → 收起按钮 + 折叠态
  * - 否则仅顶部主题装饰栏（短代码也显示装饰，无收起按钮）
  */
-export function renderLongCodeSection(
+function renderLongCodeSection(
   codeBlock: HTMLElement,
   hljs: HTMLElement,
   settings: CodeBlockSettings,

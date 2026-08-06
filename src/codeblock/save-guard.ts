@@ -16,11 +16,6 @@
  */
 import { unfoldAll } from "./folding"
 
-/** 展开指定代码块的所有折叠（幂等：无折叠时静默） */
-function unfoldBlock(codeBlock: HTMLElement) {
-  unfoldAll(codeBlock)
-}
-
 /**
  * 处理 data-editing 属性变化（由 enhancer 的共享 MutationObserver 回调调用）。
  * 思源对任何代码块发起事务更新时设置该属性 → 触发展开。
@@ -35,6 +30,6 @@ export function handleEditingMutation(mutation: MutationRecord) {
     ? el
     : el.closest(".code-block")
   if (codeBlock) {
-    unfoldBlock(codeBlock as HTMLElement)
+    unfoldAll(codeBlock as HTMLElement)
   }
 }

@@ -40,8 +40,7 @@ function syncNativeLineNumber(show: boolean) {
     w.siyuan.config.editor.codeSyntaxHighlightLineNum = show
     // 重渲染所有代码块行号（思源原生：行号容器切换显示）
     document.querySelectorAll<HTMLElement>(".code-block .protyle-linenumber__rows").forEach((el) => {
-      const block = el.parentElement
-      if (block) {
+      if (el.parentElement) {
         el.className = show ? "protyle-linenumber__rows" : "protyle-linenumber__rows fn__none"
       }
     })
