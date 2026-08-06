@@ -164,12 +164,14 @@ function foldTextArea(codeBlock: HTMLElement, hljs: HTMLElement, region: FoldReg
   }
   // 节点级折叠：按行节点组提取（不按文本偏移——折叠多次零累积误差）
   // region 来自 findFoldRegions(getCodeText)（当前 DOM 文本），行号 = 当前行
+  // 语义：start = 声明行（if {），end = 闭合行（}），折叠隐藏 start+1 .. end-1
+  // （声明行与闭合行保留可见，只折叠它们之间的内部行）
   const rows = splitLineNodeGroups(hljs)
-  if (region.start + 1 >= rows.length) {
+  if (region.start + 1 >= region.end) {
+    // 无内部行可折叠（相邻行），直接返回
     return
   }
-  const endRowIdx = Math.min(region.end, rows.length - 1)
-  const nodes = rows.slice(region.start + 1, endRowIdx + 1).flat()
+  const nodes = rows.slice(region.start + 1, region.end).flat()
   if (nodes.length === 0) {
     return
   }
@@ -181,7 +183,7 @@ function foldTextArea(codeBlock: HTMLElement, hljs: HTMLElement, region: FoldReg
   const ellipsis = document.createElement("div")
   ellipsis.className = ELLIPSIS_CLASS
   ellipsis.setAttribute("contenteditable", "false")
-  ellipsis.dataset.count = String(region.end - region.start)
+  ellipsis.dataset.count = String(region.end - region.start - 1)
   // 省略行零文本（不污染 textContent/outerHTML）——折叠后 DOM 行数真实减少，
   // 后续重新切分时省略行视为一行（splitLineNodeGroups 已处理）
   ellipsis.addEventListener("click", (e) => {
