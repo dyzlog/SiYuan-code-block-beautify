@@ -16,7 +16,6 @@ import {
   cleanupAll,
   enhanceAll,
   registerDecor,
-  setEnhanceBlock,
 } from "../src/codeblock/registry"
 import type {
   DecorContext,

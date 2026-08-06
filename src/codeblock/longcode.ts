@@ -164,7 +164,6 @@ function renderThemeDecor(bar: HTMLElement, themeStyle: string) {
   }
 }
 
-/** 确保顶部主题装饰栏存在（创建/复用，含滚动虚化监听） */
 /** 已安装滚动虚化监听的代码块（防重复绑定） */
 const fadeInstalled = new WeakSet<HTMLElement>()
 

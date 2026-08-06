@@ -1,6 +1,6 @@
 /**
  * 文本与 Range 工具：按文本偏移定位/提取 DOM 内容。
- * 用于文本模式折叠（.hljs 为「高亮 span + 换行文本」结构时按行提取）。
+ * 供当前行高亮、长代码折叠、代码统计等按行操作使用。
  */
 import { forEachTextNode } from "./dom"
 

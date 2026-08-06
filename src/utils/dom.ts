@@ -6,8 +6,6 @@
 
 /**
  * 读取代码块 .hljs 的纯文本（空值兜底）。
- * 注意：折叠态下省略行 div 内已含等量换行占位，textContent 行数与 DOM
- * 行数一致，可直接用于行号解析；非折叠块则为普通 textContent。
  */
 export function getCodeText(hljs: HTMLElement | null | undefined): string {
   return hljs?.textContent ?? ""

@@ -260,7 +260,7 @@ function onScroll() {
 }
 
 /**
- * wheel 转发：overlay 覆盖在代码块上，其可交互子元素（折叠箭头/长代码按钮）
+ * wheel 转发：overlay 覆盖在代码块上，其可交互子元素（长代码按钮等）
  * 会拦截滚轮事件。这里把滚动量转发给最近的滚动容器 .protyle-content，
  * 保证鼠标停在按钮上时滚轮依然滚动文档。
  */
@@ -291,7 +291,7 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
     ov.style.left = "0"
     ov.style.top = "0"
     ov.style.pointerEvents = "none"
-    // 裁剪内部装饰到 overlay 盒：折叠箭头/高亮在长代码内部滚动时
+    // 裁剪内部装饰到 overlay 盒：高亮在长代码内部滚动时
     // 用 transform 上移，可能超出 overlay 顶部穿透到上方代码块——overflow
     // hidden 把移出的部分裁掉，杜绝「下方块内容显示到上方块」的穿透
     ov.style.overflow = "hidden"

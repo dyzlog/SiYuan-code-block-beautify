@@ -73,9 +73,6 @@ export default class CodeBlockBeautify extends Plugin {
     const frontEnd = getFrontend()
     this.isMobile = frontEnd === "mobile" || frontEnd === "browser-mobile"
 
-
-
-
     // 先用默认设置启动，加载已保存设置后再更新
     this.applyAllSettings(this.settings)
     initCodeBlockEnhancer(this, this.settings)

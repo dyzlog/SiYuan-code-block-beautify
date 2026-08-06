@@ -14,7 +14,7 @@ import {
 } from "../src/codeblock/enhancer"
 import { DEFAULT_SETTINGS } from "../src/codeblock/settings"
 
-// jsdom 缺失/不完整的浏览器 API 兜底（与 scripts/test-repro.ts 一致）
+// jsdom 缺失/不完整的浏览器 API 兜底
 if (!Range.prototype.getBoundingClientRect) {
   Range.prototype.getBoundingClientRect = (() => ({
     top: 0,
