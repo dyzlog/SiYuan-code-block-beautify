@@ -114,11 +114,22 @@ export function applySettingsVars(s: CodeBlockSettings) {
       : `inset 0 ${-s.shadowSize}px ${-s.shadowSize * 2}px rgba(0, 0, 0, 0.3), inset 0 ${-Math.max(2, -s.shadowSize / 2)}px ${-s.shadowSize}px rgba(0, 0, 0, 0.1)`
   root.style.setProperty("--cb-shadow", shadow)
   // 边框样式 class：移除旧样式，应用新样式（solid 为默认无 class）
-  const BORDER_STYLES = ["solid", "pixel", "dashed", "handdrawn"]
   document.querySelectorAll<HTMLElement>(".code-block.cb-beautified").forEach((el) => {
-    el.classList.remove(...BORDER_STYLES.map((st) => `cb-border-${st}`))
-    if (s.borderStyle && s.borderStyle !== "solid") {
-      el.classList.add(`cb-border-${s.borderStyle}`)
-    }
+    applyBorderStyleClass(el, s.borderStyle)
   })
+}
+
+/** 边框样式集合（solid 为默认，无 class） */
+const BORDER_STYLES = ["solid", "pixel", "dashed", "handdrawn"]
+
+/**
+ * 给单个代码块应用边框样式 class（幂等：先移除全部再添加）。
+ * 供 applySettingsVars（设置变更）与 enhancer.enhance（新块增强/滚动刷新）
+ * 共用——保证滚动后新增强的代码块也带上当前边框样式。
+ */
+export function applyBorderStyleClass(codeBlock: HTMLElement, borderStyle: string) {
+  codeBlock.classList.remove(...BORDER_STYLES.map((st) => `cb-border-${st}`))
+  if (borderStyle && borderStyle !== "solid") {
+    codeBlock.classList.add(`cb-border-${borderStyle}`)
+  }
 }

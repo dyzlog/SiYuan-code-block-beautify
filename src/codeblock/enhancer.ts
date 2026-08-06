@@ -22,6 +22,9 @@ import {
   enhanceAll,
   getSelfSelectors,
 } from "./registry"
+import {
+  applyBorderStyleClass,
+} from "./settings"
 // 装饰模块（副作用：各自 registerDecor 注册，供 enhanceAll 调用）——
 // 必须显式 import，否则 Vite tree-shake 会移除未引用的模块，导致对应功能失效
 import "./code-stats"
@@ -325,6 +328,8 @@ function enhance(codeBlock: HTMLElement) {
   }
   codeBlock.dataset.cbEnhanced = ENHANCED_VALUE
   codeBlock.classList.add(BEAUTIFIED_CLASS)
+  // 应用边框样式 class（滚动刷新后新增强的块也带上当前边框样式）
+  applyBorderStyleClass(codeBlock, settings.borderStyle)
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
   // 装饰增强：背景/纹理/当前行高亮/统计角标/长代码条（注册表统一调度）
   enhanceAll({
