@@ -22,43 +22,10 @@ export function getLineStarts(text: string): number[] {
 }
 
 /**
- * 节点级行切分：把 .hljs 的子节点按「\n 文本节点」分成行节点组。
- *
- * 思源代码块 DOM 是「高亮 span + 换行文本节点」结构，行分隔符是 \n 文本节点
- * （hljs 输出中通常是独立文本节点）。折叠按节点操作而非文本偏移——
- * 折叠多少次都不会累积偏移误差。
- *
- * 简化：不切分文本节点（splitText 有 DOM 副作用），文本节点按「是否含 \n」
- * 分配到行；含 \n 的文本节点归属当前行并开启新行（\n 后内容计入新行，
- * 但节点本身只归一行——省略行提取时用 Range 按边界，视觉等价）。
- *
- * @returns 每行一个节点数组（含行尾 \n 节点；末尾行可能无 \n）
+ * 节点级行切分已移除（代码内折叠功能已删除）。
+ * 以下保留：countVisibleLines / getLineStarts / makeRange（供长代码折叠、
+ * 当前行高亮、代码统计等共用）。
  */
-export function splitLineNodeGroups(root: Node): Node[][] {
-  const rows: Node[][] = [[]]
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT)
-  let node = walker.nextNode()
-  while (node) {
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      // 元素节点（span 高亮/省略行 div）归入当前行（省略行前后 \n 负责开行）
-      rows[rows.length - 1].push(node)
-      node = walker.nextNode()
-      continue
-    }
-    const text = (node as Text).data
-    rows[rows.length - 1].push(node)
-    if (text.includes("\n")) {
-      // \n 文本节点开启新行（hljs 通常一个 \n 一个节点）
-      rows.push([])
-    }
-    node = walker.nextNode()
-  }
-  // 末尾空行（最后一个 \n 后无内容）移除
-  if (rows.length > 1 && rows[rows.length - 1].length === 0) {
-    rows.pop()
-  }
-  return rows
-}
 
 /** 定位文本偏移所在的文本节点 */
 function locateTextOffset(root: Node, target: number): { node: Text, offset: number } {

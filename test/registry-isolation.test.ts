@@ -17,10 +17,7 @@ import {
 import {
   cleanupAll,
   enhanceAll,
-  ensureEnhanced,
   registerDecor,
-  registerRenderer,
-  rerenderBlock,
   setEnhanceBlock,
 } from "../src/codeblock/registry"
 import type {
@@ -100,62 +97,5 @@ describe("enhanceAll 模块隔离", () => {
     expect(a.calls).toContain("cleanup:a")
     expect(d.calls).toContain("cleanup:d")
     expect(() => cleanupAll(block, false)).not.toThrow()
-  })
-})
-
-describe("ensureEnhanced 完整增强入口", () => {
-  let errSpy: ReturnType<typeof vi.spyOn>
-  beforeEach(() => {
-    errSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-  })
-  afterEach(() => {
-    errSpy.mockRestore()
-  })
-
-  it("块已增强（cbEnhanced=1）→ 返回 true，不触发入口", () => {
-    const block = document.createElement("div")
-    block.dataset.cbEnhanced = "1"
-    const fn = vi.fn()
-    setEnhanceBlock(fn)
-
-    const result = ensureEnhanced(block)
-    expect(result).toBe(true)
-    expect(fn).not.toHaveBeenCalled()
-  })
-
-  it("块未增强 + 已注入入口 → 触发完整增强，返回 false（由增强流程渲染）", () => {
-    const block = document.createElement("div")
-    const fn = vi.fn((el: HTMLElement) => {
-      el.dataset.cbEnhanced = "1"
-    })
-    setEnhanceBlock(fn)
-
-    const result = ensureEnhanced(block)
-    expect(result).toBe(false)
-    expect(fn).toHaveBeenCalledTimes(1)
-    expect(block.dataset.cbEnhanced).toBe("1")
-  })
-
-  it("块未增强 + 未注入入口 → 返回 false，不报错", () => {
-    setEnhanceBlock(() => {})
-    const block = document.createElement("div")
-    // 模拟未注入：入口为空函数（enhancer 卸载后的状态）
-    const result = ensureEnhanced(block)
-    expect(result).toBe(false)
-  })
-})
-
-describe("registerRenderer / rerenderBlock", () => {
-  it("注册后 rerenderBlock 触发回调；未注册的块无操作", () => {
-    const block = document.createElement("div")
-    const other = document.createElement("div")
-    const fn = vi.fn()
-    registerRenderer(block, fn)
-
-    rerenderBlock(block)
-    expect(fn).toHaveBeenCalledTimes(1)
-
-    rerenderBlock(other)
-    expect(fn).toHaveBeenCalledTimes(1) // 其他块不触发
   })
 })

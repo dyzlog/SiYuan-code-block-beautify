@@ -332,17 +332,6 @@
         <span class="cb-setting__hint">留空使用主题默认</span>
       </div>
       <div class="cb-setting__item fn__flex">
-        <span class="cb-setting__label">代码内折叠</span>
-        <label class="fn__flex">
-          <input
-            v-model="form.foldEnabled"
-            type="checkbox"
-            class="b3-switch fn__flex-center"
-          >
-        </label>
-        <span class="cb-setting__hint">显示折叠按钮，可折叠 for 循环、if、函数等代码块结构</span>
-      </div>
-      <div class="cb-setting__item fn__flex">
         <span class="cb-setting__label">语法高亮主题</span>
         <select
           v-model="form.highlightTheme"

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest"
 import {
   countVisibleLines,
   getLineStarts,
-  splitLineNodeGroups,
 } from "../src/utils/text-range"
 
 describe("getLineStarts", () => {
@@ -31,48 +30,5 @@ describe("countVisibleLines", () => {
 
   it("绌烘枃鏈�寜 1 琛�", () => {
     expect(countVisibleLines("")).toBe(1)
-  })
-})
-
-describe("splitLineNodeGroups", () => {
-  it("span + \\n 文本节点结构正确分行", () => {
-    const root = document.createElement("div")
-    const s1 = document.createElement("span")
-    s1.textContent = "if (a) {"
-    root.appendChild(s1)
-    root.appendChild(document.createTextNode("\n"))
-    const s2 = document.createElement("span")
-    s2.textContent = "  b()"
-    root.appendChild(s2)
-    root.appendChild(document.createTextNode("\n"))
-    const s3 = document.createElement("span")
-    s3.textContent = "}"
-    root.appendChild(s3)
-
-    const rows = splitLineNodeGroups(root)
-    // 3 行：if / b() / }
-    expect(rows.length).toBe(3)
-    expect(rows[0].length).toBeGreaterThan(0)
-    expect(rows[1].length).toBeGreaterThan(0)
-    expect(rows[2].length).toBeGreaterThan(0)
-  })
-
-  it("省略行占位视为一行", () => {
-    const root = document.createElement("div")
-    const s1 = document.createElement("span")
-    s1.textContent = "if (a) {"
-    root.appendChild(s1)
-    root.appendChild(document.createTextNode("\n"))
-    const ellipsis = document.createElement("div")
-    ellipsis.className = "cb-fold-ellipsis"
-    root.appendChild(ellipsis)
-    root.appendChild(document.createTextNode("\n"))
-    const s2 = document.createElement("span")
-    s2.textContent = "}"
-    root.appendChild(s2)
-
-    const rows = splitLineNodeGroups(root)
-    // 3 行：if / 省略行 / }
-    expect(rows.length).toBe(3)
   })
 })

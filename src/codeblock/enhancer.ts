@@ -18,23 +18,14 @@ import {
   TEXTURE_CLASSES,
 } from "./background"
 import {
-  clearFoldState,
-  ELLIPSIS_CLASS,
-} from "./folding"
-import {
   cleanupAll,
   enhanceAll,
   getSelfSelectors,
-  setEnhanceBlock,
 } from "./registry"
-import {
-  handleEditingMutation,
-} from "./save-guard"
 // 装饰模块（副作用：各自 registerDecor 注册，供 enhanceAll 调用）——
 // 必须显式 import，否则 Vite tree-shake 会移除未引用的模块，导致对应功能失效
 import "./code-stats"
 import "./current-line"
-import "./fold-arrows"
 import "./longcode"
 
 const CODE_BLOCK_SELECTOR = ".code-block"
@@ -75,7 +66,6 @@ function selfSelectorCache(): string {
       getSelfSelectors(),
       ".cb-overlay",
       ".cb-overlay *",
-      `.${ELLIPSIS_CLASS}`,
     ].filter(Boolean).join(",")
   }
   return cachedSelfSelector
@@ -84,9 +74,6 @@ function selfSelectorCache(): string {
 export function initCodeBlockEnhancer(p: Plugin, s: CodeBlockSettings) {
   plugin = p
   settings = s
-  // 注入完整增强入口供装饰模块防御调用（懒加载块从未被 enhance 时，
-  // rerenderBlock/折叠操作可借此触发完整渲染，而非只有箭头层）
-  setEnhanceBlock(enhance)
   p.eventBus.on("loaded-protyle-dynamic", onProtyleEvent)
   // 文档关闭/切换前清理注入元素，防止被思源序列化保存导致污染
   p.eventBus.on("destroy-protyle", onProtyleDestroy)
@@ -95,15 +82,9 @@ export function initCodeBlockEnhancer(p: Plugin, s: CodeBlockSettings) {
     if (!settings?.enabled) {
       return
     }
-    // 保存防护：data-editing 属性变化（思源事务处理代码块）→ 自动展开折叠，防省略行被序列化
-    for (const m of mutations) {
-      if (m.type === "attributes" && m.attributeName === "data-editing") {
-        handleEditingMutation(m)
-      }
-    }
-    // 忽略插件自身注入的元素（当前行高亮/统计角标/装饰栏/省略行）
+    // 忽略插件自身注入的元素（当前行高亮/统计角标/装饰栏）
     // 及其内部变化——否则我们自己的 DOM 增删会触发扫描，形成循环。
-    // 装饰类选择器由注册表自动聚合（新模块自动纳入），省略行手写补充。
+    // 装饰类选择器由注册表自动聚合（新模块自动纳入）。
     const SELF_SELECTOR = selfSelectorCache()
     // 增量收集：只登记「变化相关的代码块」（新增节点 / 变化节点的祖先代码块）
     for (const m of mutations) {
@@ -169,8 +150,6 @@ export function initCodeBlockEnhancer(p: Plugin, s: CodeBlockSettings) {
   })
   observer.observe(document.body, {
     childList: true,
-    attributes: true,
-    attributeFilter: ["data-editing"],
     subtree: true,
   })
   scan()
@@ -191,8 +170,6 @@ export function destroyCodeBlockEnhancer() {
   clearEnhancements(false)
   // 销毁 overlay 系统（卸载 scroll 监听 + 断开 ResizeObserver + 清空状态）
   destroyOverlaySystem()
-  // 清空完整增强入口（fold-arrows 防御调用将失效，符合卸载语义）
-  setEnhanceBlock(() => {})
   plugin = null
   settings = null
 }
@@ -366,12 +343,10 @@ function clearEnhancements(preserveLongCode = true) {
   document.querySelectorAll<HTMLElement>(`.code-block.${BEAUTIFIED_CLASS}`).forEach((block) => {
     block.classList.remove(BEAUTIFIED_CLASS, ...TEXTURE_CLASSES)
     delete block.dataset.cbEnhanced
-    // 装饰清理（注册表统一：当前行/统计角标/长代码条/背景纹理/折叠箭头）
+    // 装饰清理（注册表统一：当前行/统计角标/长代码条/背景纹理）
     cleanupAll(block, preserveLongCode)
-    // 主题栏/折叠箭头等全部随 overlay 整体移除（不在 codeBlock 子树内）
+    // 装饰元素全部随 overlay 整体移除（不在 codeBlock 子树内）
     removeOverlay(block)
-    // 展开代码内折叠并清理状态，恢复原始内容（折叠省略行随 unfoldAll 移除）
-    clearFoldState(block)
   })
 }
 

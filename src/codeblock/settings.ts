@@ -30,8 +30,6 @@ export interface CodeBlockSettings {
   currentLineHighlight: boolean
   /** 当前行高亮颜色（空 = 跟随主题默认半透明） */
   currentLineColor: string
-  /** 代码内折叠（折叠 for/if/函数等结构） */
-  foldEnabled: boolean
   /** 代码统计角标（底部显示行数/字符数） */
   codeStats: boolean
   /** 思源原生行号开关（同步 window.siyuan.config.editor.codeSyntaxHighlightLineNum） */
@@ -62,7 +60,6 @@ export const DEFAULT_SETTINGS: CodeBlockSettings = {
   shadowSize: 8,
   currentLineHighlight: true,
   currentLineColor: "",
-  foldEnabled: true,
   codeStats: true,
   showLineNumber: true,
   highlightTheme: "",
