@@ -128,6 +128,11 @@ function refreshFoldArrows(codeBlock: HTMLElement) {
   if (!ensureEnhanced(codeBlock)) {
     return
   }
+  // 长代码已收起时隐藏代码内折叠箭头（方案1：两套折叠不叠加）
+  if (codeBlock.dataset.cbLongFolded) {
+    clearFoldArrows(codeBlock)
+    return
+  }
   renderFoldArrows(codeBlock, hljs, getCodeText(hljs))
 }
 
@@ -135,7 +140,9 @@ registerDecor({
   selfSelector: `.${ARROWS_CLASS}, .${ARROWS_CLASS} *`,
   enhance: (ctx) => {
     // 代码块增强时渲染折叠箭头（幂等：renderFoldArrows 先清空再渲染）
-    if (ctx.hljs && ctx.settings.foldEnabled) {
+    // 方案1：长代码已收起时禁用代码内折叠箭头——两套折叠在 .hljs 上叠加
+    // 会导致行号/高度/滚动错乱，收起状态隐藏箭头，展开后恢复
+    if (ctx.hljs && ctx.settings.foldEnabled && !ctx.codeBlock.dataset.cbLongFolded) {
       renderFoldArrows(ctx.codeBlock, ctx.hljs, getCodeText(ctx.hljs))
     }
   },

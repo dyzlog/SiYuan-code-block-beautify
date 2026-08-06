@@ -16,6 +16,7 @@ import { countVisibleLines } from "../utils/text-range"
 import { measureLineAt } from "./line-measure-service"
 import {
   registerDecor,
+  rerenderBlock,
 } from "./registry"
 
 const BAR_CLASS = "cb-longcode-bar"
@@ -250,6 +251,9 @@ function renderLongCodeBar(
       }
       applyFold(codeBlock, folded, folded ? topNHeight : 0)
       updateBtn(btn!, folded)
+      // 收起/展开后刷新代码内折叠箭头：收起时隐藏、展开时恢复
+      // （方案1：长代码收起状态不叠加代码内折叠）
+      rerenderBlock(codeBlock)
       // 收起后自动滚动：让代码块顶部（第一行）落在视口中间，直接看到折叠效果
       if (folded) {
         centerBlockInViewport(codeBlock)
@@ -263,6 +267,8 @@ function renderLongCodeBar(
   applyFold(codeBlock, folded, folded ? height : 0)
   renderThemeDecor(bar, themeStyle)
   updateBtn(btn, folded)
+  // 恢复折叠状态后刷新代码内折叠箭头（收起隐藏/展开恢复，方案1）
+  rerenderBlock(codeBlock)
 }
 
 /** 完整清理长代码折叠（卸载时调用，恢复完整显示并清除状态） */
