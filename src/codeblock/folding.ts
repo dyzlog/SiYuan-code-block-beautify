@@ -18,6 +18,7 @@ import {
 } from "../utils/text-range"
 import { findFoldRegions } from "./fold"
 import { getCodeBlockLanguage } from "./language"
+import { fallbackLineHeight } from "./line-metrics"
 import { rerenderBlock } from "./registry"
 
 /** 折叠省略行类名（enhancer 兜底清理 / 折叠功能复用） */
@@ -38,7 +39,7 @@ interface FoldAreaState {
 }
 
 export interface FoldState {
-  /** 已折叠的区域（省略行承载展开入口，DOM 即状态） */
+  /** 已折叠的区域（省略行承载展开入口） */
   areas: FoldAreaState[]
 }
 
@@ -182,6 +183,17 @@ function foldTextArea(codeBlock: HTMLElement, hljs: HTMLElement, region: FoldReg
   ellipsis.className = ELLIPSIS_CLASS
   ellipsis.setAttribute("contenteditable", "false")
   ellipsis.dataset.count = String(region.end - region.start)
+  const extractedLines = region.end - region.start
+  // 省略行 div 内放与折叠行数相等的换行文本：使「文本偏移 → DOM 行」
+  // 完全线性（文本行数 = DOM 行数），makeRange 定位准确，下方行号/箭头不错位。
+  // 安全：折叠态下 save-guard 在思源 data-editing 时自动展开，思源不会
+  // 在折叠态读取 outerHTML 序列化该占位文本
+  ellipsis.textContent = "\n".repeat(extractedLines + 1)
+  // DOM 高度 = 被折叠行数：省略行 div 自身高 1 行 + margin 补足其余行
+  if (extractedLines > 1) {
+    const lineHeight = fallbackLineHeight(hljs)
+    ellipsis.style.marginBottom = `${(extractedLines - 1) * lineHeight}px`
+  }
   ellipsis.addEventListener("click", (e) => {
     e.preventDefault()
     e.stopPropagation()

@@ -108,6 +108,10 @@
   cursor: pointer;
   user-select: none;
   opacity: 0.55;
+  /* 省略行 div 内含 \n 占位文本（保持文本行数 = DOM 行数）——
+     white-space: pre 使 \n 不参与视觉折行，overflow: hidden 防止占位文本撑高 */
+  white-space: pre;
+  overflow: hidden;
   /* VS Code 风格：折叠区域高亮 */
   background-color: rgba(125, 125, 125, 0.1);
   border-radius: 2px;

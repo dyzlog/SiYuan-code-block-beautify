@@ -137,6 +137,8 @@ function refreshFoldArrows(codeBlock: HTMLElement) {
     clearFoldArrows(codeBlock)
     return
   }
+  // 折叠态下省略行 div 内已含等量换行占位，textContent 行数 = DOM 行数，
+  // 直接解析即可（makeRange 偏移定位线性，下方箭头不错位）
   renderFoldArrows(codeBlock, hljs, getCodeText(hljs))
 }
 
