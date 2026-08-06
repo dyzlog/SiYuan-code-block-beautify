@@ -291,6 +291,10 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
     ov.style.left = "0"
     ov.style.top = "0"
     ov.style.pointerEvents = "none"
+    // 裁剪内部装饰到 overlay 盒：折叠箭头/高亮在长代码内部滚动时
+    // 用 transform 上移，可能超出 overlay 顶部穿透到上方代码块——overflow
+    // hidden 把移出的部分裁掉，杜绝「下方块内容显示到上方块」的穿透
+    ov.style.overflow = "hidden"
     const parent = codeBlock.parentElement
     if (parent) {
       parent.insertBefore(ov, codeBlock.nextSibling)
