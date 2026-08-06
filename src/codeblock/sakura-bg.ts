@@ -145,9 +145,9 @@ function magicCircle(scale: number, full: boolean): string {
       parts.push(line(vx, vy, mx, my, 0.8, 0.4))
     }
 
-    // 4. 大内环（0.6R，与五芒星顶点相交）+ 内圈刻度带（加长更明显，画在五芒星前）
+    // 4. 大内环（0.6R，与五芒星顶点相交）+ 内圈刻度带（加长 0.90→1.0 明显可见）
     parts.push(circle(0, 0, 0.6 * r, 2, 0.85))
-    parts.push(tickRing(0.6 * r, 0.94, 1.0))
+    parts.push(tickRing(0.6 * r, 0.90, 1.0))
 
     // 5. 核心五芒星（后画，不被放射线割断）
     const star: string[] = []
@@ -176,15 +176,14 @@ function magicCircle(scale: number, full: boolean): string {
       parts.push(line(ex, ey, wx, wy, 0.6, 0.3))
     }
 
-    // 6. 偏心圆（左下）+ 内部嵌套圆环结（刻度在圆外侧，内部只留花纹）
+    // 6. 偏心圆（左下）+ 内部简洁凯尔特结（无多余同心圆，刻度在外侧）
     const exCx = -0.35 * r
     const exCy = 0.25 * r
     parts.push(circle(exCx, exCy, 0.24 * r, 1.5, 0.85))
     // 刻度画在圆外侧（innerFrac>1，紧贴圆外缘）
     parts.push(tickRing2(exCx, exCy, 0.24 * r, 36, 1.0, 1.08, 1))
-    // 内部只保留花纹：小凯尔特结 + 内环（包裹纹章）
-    parts.push(circle(exCx, exCy, 0.15 * r, 1, 0.7))
-    parts.push(knotRune(exCx, exCy, 0.12 * r))
+    // 内部只留简洁凯尔特结（无同心圆/花朵）
+    parts.push(knotRune(exCx, exCy, 0.15 * r))
 
     // 7. 新月形刻度轨道（Arc 弧线带 + 轨道齿痕）
     parts.push(crescentTrack(r))
@@ -226,42 +225,36 @@ function tickRing2(cx: number, cy: number, radius: number, count: number, innerF
 }
 
 /**
- * 新月形刻度轨道：双弧带（限制在 0.55R-0.85R 环带内，不外凸越界）。
- * 起点锁在右侧内环边缘，经右下弯，终到偏心圆上方。
+ * 新月形刻度轨道：单条三次贝塞尔 C 曲线（平滑无折角，限制在环带内）。
+ * 起点锁在右侧内环边缘 (0.6R,0)，控制点向右下弯，终到偏心圆上方 (-0.35R,0.05R)。
  */
 function crescentTrack(r: number): string {
   const parts: string[] = []
-  // 起点：右侧内环边缘 (0.6R, 0)；终点：偏心圆上方 (-0.35R, 0.05R)
   const sx = 0.6 * r
   const sy = 0
   const ex = -0.35 * r
   const ey = 0.05 * r
-  // 两段弧，半径限制在环带内（0.7R），圆心分别在起点/终点连线的两侧
-  // 第一段：起点 → 中点（右下），半径 0.7R（向内凹，不外凸）
-  const midX = 0.15 * r
-  const midY = 0.55 * r
-  // 用经过三点的圆弧（起点/中点/终点），保证在环带内
-  const arcR = 0.7 * r
-  // 外弧：三段式圆弧路径（起点→中点→终点）
-  parts.push(`<path d="M ${sx.toFixed(1)} ${sy.toFixed(1)} A ${arcR.toFixed(1)} ${arcR.toFixed(1)} 0 0 1 ${midX.toFixed(1)} ${midY.toFixed(1)} A ${arcR.toFixed(1)} ${arcR.toFixed(1)} 0 0 1 ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.5"/>`)
-  // 内弧（偏移 0.06R，向圆心方向）
+  // 三次贝塞尔控制点：C1 向右下推（形成大弧），C2 向左下弯向偏心圆
+  const c1x = 0.55 * r
+  const c1y = 0.5 * r
+  const c2x = 0.0 * r
+  const c2y = 0.35 * r
+  // 外弧：单条 C 曲线（连续平滑）
+  parts.push(`<path d="M ${sx.toFixed(1)} ${sy.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.5"/>`)
+  // 内弧（偏移 0.06R，垂直方向偏移）
   const off = 0.06 * r
-  const innerR = arcR - off
-  parts.push(`<path d="M ${(sx - off).toFixed(1)} ${sy.toFixed(1)} A ${innerR.toFixed(1)} ${innerR.toFixed(1)} 0 0 1 ${(midX - off * 0.4).toFixed(1)} ${(midY - off * 0.4).toFixed(1)} A ${innerR.toFixed(1)} ${innerR.toFixed(1)} 0 0 1 ${(ex + off * 0.5).toFixed(1)} ${(ey + off * 0.5).toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.2" opacity="0.8"/>`)
-  // 轨道齿痕：沿外弧参数采样（两段各 10 个）
-  const sample = (ax: number, ay: number, bx: number, by: number, cxx: number, cyy: number, t: number): [number, number] => {
-    // 圆弧参数：以三点定圆插值
-    const u = (1 - t)
-    return [u * u * ax + 2 * u * t * cxx + t * t * bx, u * u * ay + 2 * u * t * cyy + t * t * by]
-  }
-  // 用二次贝塞尔近似采样（通过三点：起点/中点/终点）
-  for (let i = 0; i <= 18; i++) {
-    const t = i / 18
-    const [bx, by] = sample(sx, sy, ex, ey, midX, midY, t)
-    // 径向法线（指向圆心方向：原点方向）
-    const dist = Math.hypot(bx, by) || 1
-    const nx = bx / dist
-    const ny = by / dist
+  parts.push(`<path d="M ${(sx - off * 0.5).toFixed(1)} ${(sy + off * 0.5).toFixed(1)} C ${(c1x - off * 0.5).toFixed(1)} ${(c1y - off * 0.5).toFixed(1)} ${(c2x + off * 0.5).toFixed(1)} ${(c2y - off * 0.5).toFixed(1)} ${(ex + off * 0.5).toFixed(1)} ${(ey + off * 0.5).toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.2" opacity="0.8"/>`)
+  // 轨道齿痕：沿三次贝塞尔真实采样（切线法线，20 个等距）
+  for (let i = 0; i <= 19; i++) {
+    const t = i / 19
+    const mt = 1 - t
+    const bx = mt * mt * mt * sx + 3 * mt * mt * t * c1x + 3 * mt * t * t * c2x + t * t * t * ex
+    const by = mt * mt * mt * sy + 3 * mt * mt * t * c1y + 3 * mt * t * t * c2y + t * t * t * ey
+    const dx = 3 * mt * mt * (c1x - sx) + 6 * mt * t * (c2x - c1x) + 3 * t * t * (ex - c2x)
+    const dy = 3 * mt * mt * (c1y - sy) + 6 * mt * t * (c2y - c1y) + 3 * t * t * (ey - c2y)
+    const len = Math.hypot(dx, dy) || 1
+    const nx = -dy / len
+    const ny = dx / len
     const hl = 0.035 * r
     parts.push(line(bx - nx * hl, by - ny * hl, bx + nx * hl, by + ny * hl, 1, 0.7))
   }
