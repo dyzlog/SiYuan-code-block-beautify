@@ -6,6 +6,7 @@
  */
 import {
   caretLine,
+  getCodeText,
 } from "../utils/dom"
 import { getOverlay } from "../utils/overlay"
 import {
@@ -24,7 +25,7 @@ const controllers = new WeakMap<HTMLElement, AbortController>()
 
 /** 高亮指定行（定位高亮块；高度 = 完整行高，与闪烁光标一致） */
 function highlightLine(codeBlock: HTMLElement, hljs: HTMLElement, lineIdx: number) {
-  const text = hljs.textContent ?? ""
+  const text = getCodeText(hljs)
   const starts = getLineStarts(text)
   if (lineIdx < 0 || lineIdx >= starts.length) {
     return
@@ -65,14 +66,14 @@ function clearHighlight(codeBlock: HTMLElement) {
 }
 
 /** 移除高亮块并解除监听 */
-export function removeCurrentLine(codeBlock: HTMLElement) {
+function removeCurrentLine(codeBlock: HTMLElement) {
   controllers.get(codeBlock)?.abort()
   controllers.delete(codeBlock)
   clearHighlight(codeBlock)
 }
 
 /** 初始化当前行高亮：光标在块内 → 高亮光标行；光标消失 → 移除 */
-export function initCurrentLine(codeBlock: HTMLElement, hljs: HTMLElement, enabled: boolean) {
+function initCurrentLine(codeBlock: HTMLElement, hljs: HTMLElement, enabled: boolean) {
   if (!enabled) {
     removeCurrentLine(codeBlock)
     return
@@ -134,11 +135,11 @@ export function initCurrentLine(codeBlock: HTMLElement, hljs: HTMLElement, enabl
     }
     schedule()
   }, opts)
-  // 光标彻底离开代码块 → 立即移除
+  // 光标彻底离开代码块 → 仅移除高亮（保留监听，光标回来继续跟随）
   hljs.addEventListener("focusout", () => {
     dirty = false
     currentLine = -1
-    removeCurrentLine(codeBlock)
+    clearHighlight(codeBlock)
   }, opts)
 }
 

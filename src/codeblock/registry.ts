@@ -1,7 +1,7 @@
 /**
  * 装饰模块注册表。
  *
- * 统一管理各装饰模块（当前行高亮/统计角标/active guide/长代码条/背景纹理）
+ * 统一管理各装饰模块（当前行高亮/统计角标/长代码条/背景纹理）
  * 的「自身选择器 + 增强 + 清理」：
  * - selfSelector 聚合生成 MutationObserver 的忽略选择器（新模块自动纳入，永不漏登记）
  * - cleanup 聚合供增强清理调用（新模块自动清理，永不漏清理）
@@ -50,16 +50,16 @@ export function cleanupAll(codeBlock: HTMLElement, preserve: boolean): void {
   }
 }
 
-/* ---------------- 行号列渲染器注册表（原有，解耦行号/折叠重渲染） ---------------- */
+/* ---------------- 折叠箭头刷新注册表（rerenderBlock 触发） ---------------- */
 
 const blockRenderers = new WeakMap<HTMLElement, () => void>()
 
-/** 注册某个代码块的行号列渲染器 */
+/** 注册某个代码块的折叠箭头刷新器 */
 export function registerRenderer(codeBlock: HTMLElement, render: () => void): void {
   blockRenderers.set(codeBlock, render)
 }
 
-/** 触发某个代码块的行号列重渲染（若已注册） */
+/** 触发某个代码块的折叠箭头重渲染（若已注册） */
 export function rerenderBlock(codeBlock: HTMLElement): void {
   blockRenderers.get(codeBlock)?.()
 }

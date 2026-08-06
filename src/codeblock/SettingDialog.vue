@@ -73,60 +73,6 @@
         {{ form.shadowSize > 0 ? "正数：下投影（上凸感）" : form.shadowSize < 0 ? "负数：内嵌（下凹感）" : "0：无阴影" }}
       </div>
       <div class="cb-setting__item fn__flex">
-        <span class="cb-setting__label">代码缩进竖线</span>
-        <label class="fn__flex">
-          <input
-            v-model="form.showIndentGuides"
-            type="checkbox"
-            class="b3-switch fn__flex-center"
-          >
-        </label>
-        <span class="cb-setting__hint">VS Code 风格缩进参考线</span>
-      </div>
-      <div
-        v-if="form.showIndentGuides"
-        class="cb-setting__item fn__flex"
-      >
-        <span class="cb-setting__label">彩虹缩进竖线</span>
-        <label class="fn__flex">
-          <input
-            v-model="form.rainbowIndent"
-            type="checkbox"
-            class="b3-switch fn__flex-center"
-          >
-        </label>
-        <span class="cb-setting__hint">不同缩进层级不同颜色</span>
-      </div>
-      <div
-        v-if="form.showIndentGuides"
-        class="cb-setting__item fn__flex"
-      >
-        <span class="cb-setting__label">光标级别高亮</span>
-        <label class="fn__flex">
-          <input
-            v-model="form.activeGuideHighlight"
-            type="checkbox"
-            class="b3-switch fn__flex-center"
-          >
-        </label>
-        <span class="cb-setting__hint">光标所在缩进级别的竖线加深（VS Code 风格）</span>
-      </div>
-      <div class="cb-setting__item fn__flex">
-        <span class="cb-setting__label">缩进竖线颜色</span>
-        <input
-          v-model="form.indentGuideColor"
-          type="color"
-          class="b3-color-picker fn__flex-center cb-setting__color"
-        >
-        <button
-          class="b3-button b3-button--outline fn__flex-center cb-setting__reset-btn"
-          @click="form.indentGuideColor = ''"
-        >
-          清除
-        </button>
-        <span class="cb-setting__hint">留空使用默认淡灰色</span>
-      </div>
-      <div class="cb-setting__item fn__flex">
         <span class="cb-setting__label">代码统计角标</span>
         <label class="fn__flex">
           <input
@@ -266,29 +212,29 @@
           <option value="dots">
             点阵
           </option>
-          <option value="blueprint">
-            蓝图
+          <option value="ruled">
+            横线本
           </option>
-          <option value="diagonal">
-            对角线
+          <option value="columns">
+            竖线本
           </option>
-          <option value="ripples">
-            涟漪
+          <option value="cross">
+            交叉网格
           </option>
-          <option value="checkerboard">
-            棋盘格
+          <option value="dotgrid">
+            虚线网格
+          </option>
+          <option value="stripes">
+            斜纹
+          </option>
+          <option value="notebook">
+            笔记本页
           </option>
           <option value="carbon">
             碳纤维
           </option>
-          <option value="aurora">
-            极光
-          </option>
-          <option value="honeycomb">
-            蜂窝
-          </option>
-          <option value="barcode">
-            条形码
+          <option value="graph">
+            小方格纸
           </option>
         </select>
         <span class="cb-setting__hint">低透明度装饰，不影响代码阅读</span>
@@ -301,7 +247,7 @@
         代码
       </div>
       <div class="cb-setting__item fn__flex">
-        <span class="cb-setting__label">显示行号</span>
+        <span class="cb-setting__label">显示代码行号</span>
         <label class="fn__flex">
           <input
             v-model="form.showLineNumber"
@@ -309,6 +255,7 @@
             class="b3-switch fn__flex-center"
           >
         </label>
+        <span class="cb-setting__hint">控制思源原生行号显示，保存后生效</span>
       </div>
       <div class="cb-setting__item fn__flex">
         <span class="cb-setting__label">代码字体</span>
@@ -393,7 +340,7 @@
             class="b3-switch fn__flex-center"
           >
         </label>
-        <span class="cb-setting__hint">在行号左侧显示折叠按钮，可折叠 for 循环、if、函数等代码块结构</span>
+        <span class="cb-setting__hint">显示折叠按钮，可折叠 for 循环、if、函数等代码块结构</span>
       </div>
       <div class="cb-setting__item fn__flex">
         <span class="cb-setting__label">语法高亮主题</span>
@@ -489,14 +436,8 @@
           <option value="terminal">
             终端提示符
           </option>
-          <option value="ekg">
-            心电图
-          </option>
           <option value="codesym">
             代码符号
-          </option>
-          <option value="pixel">
-            像素方块
           </option>
         </select>
       </div>
@@ -784,10 +725,10 @@ const save = () => {
   &:hover {
     background-color: var(--b3-theme-background-light);
   }
+}
 
-  &--active {
-    outline: 1px solid var(--b3-theme-primary);
-  }
+.cb-bg-select__item--active {
+  outline: 1px solid var(--b3-theme-primary);
 }
 
 .cb-bg-select__thumb {

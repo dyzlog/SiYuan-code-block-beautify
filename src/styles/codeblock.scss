@@ -11,7 +11,7 @@
   /* 用户自定义背景色（空值时无效，回退主题默认） */
   background-color: var(--cb-bg-color) !important;
   overflow: hidden;
-  /* 创建 stacking context：让 z-index 为负的背景/缩进线保持在背景之上、代码内容之下 */
+  /* 创建 stacking context：让 z-index 为负的背景保持在背景之上、代码内容之下 */
   isolation: isolate;
 
   /* 自定义背景图片：虚化后作为背景，不遮挡代码 */
@@ -35,61 +35,6 @@
     z-index: -1;
     background-color: color-mix(in srgb, var(--b3-theme-background) var(--cb-bg-mask-opacity, 78%), transparent);
     pointer-events: none;
-  }
-
-  /* 预留行号列宽度（仅当存在行号列时）：分割线到代码留 12px 呼吸空间 */
-  &.cb-with-linenumbers .hljs {
-    padding-left: calc(var(--cb-linenumber-width, 3em) + 12px) !important;
-  }
-}
-
-/* ---------------- 行号列 ---------------- */
-
-.cb-linenumbers {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 1;
-  width: var(--cb-linenumber-width, 3em);
-  overflow: hidden;
-  user-select: none;
-  pointer-events: none;
-
-  .cb-linenumbers__inner {
-    position: relative;
-    will-change: translate;
-  }
-
-  .cb-linenumber {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 6px;
-    padding-right: 10px;
-    font-size: var(--cb-line-font-size, 14px);
-    font-family: var(--cb-font-family, var(--b3-font-code, monospace));
-    color: var(--b3-theme-on-surface);
-    box-sizing: border-box;
-  }
-
-  /* 折叠箭头槽位：统一宽度，无箭头的代码块也保留，保证行号同列 */
-  .cb-fold-slot {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    flex-shrink: 0;
-  }
-
-  .cb-linenumber__num {
-    /* VS Code 风格：行号右对齐到箭头前；折叠箭头位于行号和代码之间 */
-    margin-left: auto;
-    opacity: 0.6;
   }
 }
 
@@ -177,32 +122,18 @@
   }
 }
 
-/* VS Code 风格：代码缩进竖线（indent guides）。
-   z-index 为负：位于代码内容之下，代码字符会覆盖竖线，产生"竖线被行截断"的效果 */
-.cb-indent-guides {
+/* 独立折叠箭头层（与行号列解耦，原生/插件行号下都渲染） */
+.cb-fold-arrows {
   position: absolute;
   top: 0;
-  left: calc(var(--cb-linenumber-width, 3em) + 12px);
-  right: 0;
-  z-index: -1;
-  overflow: hidden;
+  left: 0;
+  z-index: 2;
   pointer-events: none;
-  user-select: none;
 
-  .cb-indent-guide {
+  .cb-fold-arrow {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 1px;
-    /* 缩进参考线颜色（用户可自定义，空值回退默认淡灰） */
-    background-color: var(--cb-indent-guide-color, rgba(127, 127, 127, 0.15));
+    left: 4px;
   }
-}
-
-/* 行号列中的省略项 */
-.cb-linenumber--ellipsis {
-  justify-content: center;
-  opacity: 0.55;
 }
 
 /* ---------------- 长代码折叠 ---------------- */
@@ -217,7 +148,9 @@
   height: 24px;
   z-index: 3;
   pointer-events: none;
-  background-color: var(--cb-bg-color, var(--b3-theme-background-light));
+  /* 背景透明：圆角同步外观设置（顶部两角跟随代码块圆角） */
+  background-color: transparent;
+  border-radius: var(--cb-radius, 8px) var(--cb-radius, 8px) 0 0;
   border-bottom: 1px solid var(--b3-border-color);
   opacity: 0.95;
   transition: opacity 0.2s;
@@ -227,9 +160,31 @@
     opacity: 0.2;
   }
 
-  /* Chrome 风格：浅灰顶栏 */
+  /* Chrome 风格：浅灰顶栏（背景透明时仅保留边框分隔） */
   &.cb-longcode-bar--chrome {
-    background-color: #e8e8e8;
+    background-color: transparent;
+  }
+
+  /* 终端提示符：❯_ 左侧留白并垂直居中 */
+  .cb-longcode-terminal {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 13px;
+    line-height: 1;
+    color: var(--b3-theme-on-surface);
+  }
+
+  /* 代码符号：</> 左侧留白并垂直居中 */
+  .cb-longcode-codesym {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 13px;
+    line-height: 1;
+    color: var(--b3-theme-on-surface);
   }
 
   /* Mac / Ubuntu / 终端：左侧圆点 */
@@ -377,39 +332,6 @@
 
 
 /* 思源原生右上角工具（语言/复制/更多）悬浮显示，不被装饰栏遮挡 */
-
-/* ---------------- 背景纹理（CSS 主题） ---------------- */
-/* 网格纸：透明格线叠加在背景色上 */
-.code-block.cb-beautified.cb-bg-grid {
-  background-image:
-    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.07) 0 1px, transparent 1px 24px),
-    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.07) 0 1px, transparent 1px 24px);
-}
-
-/* 点阵：均匀小点 */
-.code-block.cb-beautified.cb-bg-dots {
-  background-image: radial-gradient(rgba(0, 0, 0, 0.18) 1px, transparent 1px);
-  background-size: 18px 18px;
-}
-
-/* 星空：半透明深蓝底 + 多颗星星 */
-.code-block.cb-beautified.cb-bg-starfield {
-  background-image:
-    radial-gradient(1px 1px at 15% 25%, rgba(255, 255, 255, 0.75), transparent),
-    radial-gradient(1px 1px at 35% 70%, rgba(255, 255, 255, 0.5), transparent),
-    radial-gradient(1.5px 1.5px at 55% 15%, rgba(255, 255, 255, 0.65), transparent),
-    radial-gradient(1px 1px at 75% 45%, rgba(255, 255, 255, 0.5), transparent),
-    radial-gradient(1px 1px at 90% 80%, rgba(255, 255, 255, 0.6), transparent),
-    radial-gradient(1.5px 1.5px at 25% 85%, rgba(255, 255, 255, 0.55), transparent),
-    linear-gradient(rgba(6, 12, 36, 0.75), rgba(6, 12, 36, 0.75));
-}
-
-/* 代码雨：绿色竖线纹理 */
-.code-block.cb-beautified.cb-bg-matrix {
-  background-image:
-    repeating-linear-gradient(90deg, transparent 0 22px, rgba(0, 255, 130, 0.09) 22px 23px),
-    repeating-linear-gradient(0deg, transparent 0 22px, rgba(0, 255, 130, 0.05) 22px 23px);
-}
 
 /* 代码字体（空值回退跟随主题） */
 .code-block.cb-beautified .hljs {

@@ -2,7 +2,7 @@
  * 代码块美化插件 - 扫描调度模块
  *
  * 通过 MutationObserver + 思源 eventBus 事件扫描文档中的代码块，
- * 对新增代码块调用行号渲染（linenumbers），并负责插件的启动/销毁/设置变更。
+ * 对新增代码块调用装饰增强（注册表），并负责插件的启动/销毁/设置变更。
  */
 import type { Plugin } from "siyuan"
 import type { CodeBlockSettings } from "./settings"
@@ -11,31 +11,38 @@ import {
   scheduleIdle,
 } from "../utils/dom"
 import {
-  getOverlay,
   removeOverlay,
 } from "../utils/overlay"
-import { countVisibleLines } from "../utils/text-range"
 import {
   TEXTURE_CLASSES,
 } from "./background"
-import { clearFoldState } from "./folding"
-import { renderLineNumbers } from "./linenumbers"
+import {
+  clearFoldState,
+  ELLIPSIS_CLASS,
+} from "./folding"
 import {
   cleanupAll,
   enhanceAll,
   getSelfSelectors,
-  rerenderBlock,
 } from "./registry"
+import {
+  handleEditingMutation,
+} from "./save-guard"
+// 装饰模块（副作用：各自 registerDecor 注册，供 enhanceAll 调用）——
+// 必须显式 import，否则 Vite tree-shake 会移除未引用的模块，导致对应功能失效
+import "./code-stats"
+import "./current-line"
+import "./fold-arrows"
+import "./longcode"
 
 const CODE_BLOCK_SELECTOR = ".code-block"
-const SCAN_DEBOUNCE_MS = 200
+/** 扫描防抖下限（ms）——scheduleIdle 空闲调度的基础等待 */
+const SCAN_DEBOUNCE_MS = 300
 
 /** Node.ELEMENT_NODE（1）：不依赖全局 Node，保证在任意 JS 环境（含测试隔离环境）可解析 */
 const ELEMENT_NODE = 1
 
 const BEAUTIFIED_CLASS = "cb-beautified"
-const WITH_LINENUMBERS_CLASS = "cb-with-linenumbers"
-const LINENUMBERS_CLASS = "cb-linenumbers"
 
 let plugin: Plugin | null = null
 let settings: CodeBlockSettings | null = null
@@ -57,6 +64,21 @@ const pendingBlocks = new Set<HTMLElement>()
 /** 待执行扫描的范围（all 优先级更高，可覆盖 pending） */
 let scanScope: "pending" | "all" = "pending"
 
+/** 自身注入元素选择器缓存（装饰模块注册后固定，避免每次 mutation 重算） */
+let cachedSelfSelector = ""
+
+function selfSelectorCache(): string {
+  if (!cachedSelfSelector) {
+    cachedSelfSelector = [
+      getSelfSelectors(),
+      ".cb-overlay",
+      ".cb-overlay *",
+      `.${ELLIPSIS_CLASS}`,
+    ].filter(Boolean).join(",")
+  }
+  return cachedSelfSelector
+}
+
 export function initCodeBlockEnhancer(p: Plugin, s: CodeBlockSettings) {
   plugin = p
   settings = s
@@ -68,17 +90,16 @@ export function initCodeBlockEnhancer(p: Plugin, s: CodeBlockSettings) {
     if (!settings?.enabled) {
       return
     }
-    // 忽略插件自身注入的元素（行号列/当前行高亮/统计角标/装饰栏/缩进线/省略行）
+    // 保存防护：data-editing 属性变化（思源事务处理代码块）→ 自动展开折叠，防省略行被序列化
+    for (const m of mutations) {
+      if (m.type === "attributes" && m.attributeName === "data-editing") {
+        handleEditingMutation(m)
+      }
+    }
+    // 忽略插件自身注入的元素（当前行高亮/统计角标/装饰栏/省略行）
     // 及其内部变化——否则我们自己的 DOM 增删会触发扫描，形成循环。
-    // 装饰类选择器由注册表自动聚合（新模块自动纳入），行号列/省略行手写补充。
-    const SELF_SELECTOR = [
-      getSelfSelectors(),
-      `.${LINENUMBERS_CLASS}`,
-      ".cb-linenumbers *",
-      ".cb-overlay",
-      ".cb-overlay *",
-      ".cb-fold-ellipsis",
-    ].filter(Boolean).join(",")
+    // 装饰类选择器由注册表自动聚合（新模块自动纳入），省略行手写补充。
+    const SELF_SELECTOR = selfSelectorCache()
     // 增量收集：只登记「变化相关的代码块」（新增节点 / 变化节点的祖先代码块）
     for (const m of mutations) {
       const target = m.target as Element | null
@@ -143,6 +164,8 @@ export function initCodeBlockEnhancer(p: Plugin, s: CodeBlockSettings) {
   })
   observer.observe(document.body, {
     childList: true,
+    attributes: true,
+    attributeFilter: ["data-editing"],
     subtree: true,
   })
   scan()
@@ -159,8 +182,8 @@ export function destroyCodeBlockEnhancer() {
     observer = null
   }
   // 卸载时完整清理（含长代码折叠状态）
+  clearPendingEnhanceObservers()
   clearEnhancements(false)
-  clearRenderObservers()
 
 
 
@@ -190,7 +213,7 @@ function scheduleScan(scope: "pending" | "all" = "pending") {
     scanScope = "pending"
     scan(s)
   }
-  scheduleIdle(run, Math.max(SCAN_DEBOUNCE_MS, 300))
+  scheduleIdle(run, SCAN_DEBOUNCE_MS)
 }
 
 function scan(scope: "pending" | "all" = "all") {
@@ -219,73 +242,101 @@ function scan(scope: "pending" | "all" = "all") {
       ov.remove()
     }
   })
-  document.querySelectorAll<HTMLElement>(CODE_BLOCK_SELECTOR).forEach((block) => {
-    processBlock(block)
-  })
+  // 分批处理：避免一次同步遍历全部代码块阻塞主线程（长文档初始化不卡）
+  const blocks = Array.from(document.querySelectorAll<HTMLElement>(CODE_BLOCK_SELECTOR))
+  const BATCH = 20
+  let i = 0
+  const nextBatch = () => {
+    const end = Math.min(i + BATCH, blocks.length)
+    for (; i < end; i++) {
+      processBlock(blocks[i])
+    }
+    if (i < blocks.length) {
+      // 空闲调度下一批（requestIdleCallback 优先，回退 setTimeout）
+      scheduleIdle(nextBatch, 100)
+    }
+  }
+  nextBatch()
 }
 
-/** 处理单个代码块：已增强则校验，否则增强 */
+/** 等待进入视口后增强的代码块（长文档初始化不阻塞；进入视口前 200px 才增强） */
+const pendingEnhanceBlocks = new Set<HTMLElement>()
+/** 共享视口观察器（单实例观察所有待增强块，避免每块一个 IO） */
+let enhanceObserver: IntersectionObserver | null = null
+
+/** 确保共享观察器已创建（惰性，首次调用时） */
+function ensureEnhanceObserver() {
+  if (enhanceObserver) {
+    return
+  }
+  enhanceObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      const block = entry.target as HTMLElement
+      pendingEnhanceBlocks.delete(block)
+      enhanceObserver?.unobserve(block)
+      if (entry.isIntersecting && settings) {
+        enhance(block)
+      }
+    }
+    // 无待观察块时断开观察器（释放资源）
+    if (pendingEnhanceBlocks.size === 0) {
+      enhanceObserver?.disconnect()
+      enhanceObserver = null
+    }
+  }, { rootMargin: "200px" })
+}
+
+/** 处理单个代码块：已增强则校验；未增强且不在视口 → 进入视口再增强 */
 function processBlock(block: HTMLElement) {
   if (block.dataset.cbEnhanced === ENHANCED_VALUE) {
     verify(block)
-  } else {
+    return
+  }
+  // 视口门控：不可见代码块延迟到进入视口再增强（长文档初始化不全量增强）
+  if (isElementVisible(block)) {
     enhance(block)
+  } else {
+    observeForEnhance(block)
   }
 }
 
 /** 元素是否可见（祖先链无 display:none 等，非当前文档的 protyle 不可见） */
 function isElementVisible(el: HTMLElement): boolean {
-  // checkVisibility 不触发布局（滚动中 scan 遍历所有代码块时避免强制 reflow）；
-  // 旧浏览器降级为 offsetParent / getClientRects
   if (typeof el.checkVisibility === "function") {
     return el.checkVisibility()
   }
   return el.offsetParent !== null || el.getClientRects().length > 0
 }
 
-/** 待修正的行号列（行数变化后防抖重建，避免滚动中重建导致错位） */
-const pendingReform = new WeakMap<HTMLElement, number>()
+/** 监听代码块进入视口后增强（共享观察器；触发即移除该块） */
+function observeForEnhance(codeBlock: HTMLElement) {
+  if (pendingEnhanceBlocks.has(codeBlock)) {
+    return
+  }
+  pendingEnhanceBlocks.add(codeBlock)
+  ensureEnhanceObserver()
+  enhanceObserver?.observe(codeBlock)
+}
 
-/** 校验已增强的代码块：若思源重渲染导致注入元素丢失，则补齐 */
+/** 卸载时断开共享观察器并清空待增强队列 */
+function clearPendingEnhanceObservers() {
+  enhanceObserver?.disconnect()
+  enhanceObserver = null
+  pendingEnhanceBlocks.clear()
+}
+
+/** 校验已增强的代码块：若思源重渲染导致注入元素丢失，则补齐（注册表幂等） */
 function verify(codeBlock: HTMLElement) {
   if (!settings) {
     return
   }
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
-  // 装饰补齐（注册表幂等）：背景/纹理/当前行高亮/统计角标/active guide/长代码条
+  // 装饰补齐（注册表幂等）：背景/纹理/当前行高亮/统计角标/长代码条/折叠箭头
   enhanceAll({
     codeBlock,
     hljs,
     settings,
   })
-  if (settings.showLineNumber || settings.foldEnabled) {
-    const existing = getOverlay(codeBlock).querySelector(`.${LINENUMBERS_CLASS}`)
-    if (!existing) {
-      // 行号列丢失（思源重建代码块）→ 立即补齐
-      renderLineNumbers(codeBlock, settings)
-      rerenderBlock(codeBlock)
-    } else {
-      // 行号列存在但行数变化（思源动态处理 .hljs 内容）：
-      // 不立即重建（滚动中重建会重置 transform、导致行号错位/空白），
-      // 防抖到滚动停止后再修正
-      const expected = hljs ? countVisibleLines(hljs.textContent ?? "") : 0
-      const existingCount = getOverlay(codeBlock).querySelectorAll(`.${LINENUMBERS_CLASS} .cb-linenumber`).length
-      if (existingCount !== expected) {
-        const timer = pendingReform.get(codeBlock)
-        if (timer) {
-          window.clearTimeout(timer)
-        }
-        pendingReform.set(codeBlock, window.setTimeout(() => {
-          pendingReform.delete(codeBlock)
-          if (!settings || !codeBlock.isConnected || codeBlock.dataset.cbEnhanced !== ENHANCED_VALUE) {
-            return
-          }
-          renderLineNumbers(codeBlock, settings)
-          rerenderBlock(codeBlock)
-        }, 500))
-      }
-    }
-  }
 }
 
 function enhance(codeBlock: HTMLElement) {
@@ -298,51 +349,13 @@ function enhance(codeBlock: HTMLElement) {
   codeBlock.dataset.cbEnhanced = ENHANCED_VALUE
   codeBlock.classList.add(BEAUTIFIED_CLASS)
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
-  // 装饰增强：背景/纹理/当前行高亮/统计角标/active guide/长代码条（注册表统一调度）
+  // 装饰增强：背景/纹理/当前行高亮/统计角标/长代码条（注册表统一调度）
   enhanceAll({
     codeBlock,
     hljs,
     settings,
   })
-  if (settings.showLineNumber || settings.foldEnabled) {
-    // 行号列渲染会逐行测量（强制布局）——长文档只在可视区渲染，
-    // 滚动接近（提前 200px）时再渲染其余代码块，避免加载卡顿
-    if (isElementVisible(codeBlock)) {
-      renderLineNumbers(codeBlock, settings)
-    } else {
-      observeForRender(codeBlock)
-    }
-  }
 }
-
-/** 等待进入视口后渲染行号列（长文档加载不阻塞；进入视口后只渲染一次） */
-const renderObservers = new Map<HTMLElement, IntersectionObserver>()
-
-function observeForRender(codeBlock: HTMLElement) {
-  if (renderObservers.has(codeBlock)) {
-    return
-  }
-  const io = new IntersectionObserver((entries) => {
-    const block = entries[0].target as HTMLElement
-    // 触发即清理（块被移除时也会触发一次，避免观察器累积泄漏）
-    renderObservers.delete(block)
-    io.disconnect()
-    if (entries[0].isIntersecting && settings) {
-      renderLineNumbers(block, settings)
-      rerenderBlock(block)
-    }
-  }, { rootMargin: "200px" })
-  renderObservers.set(codeBlock, io)
-  io.observe(codeBlock)
-}
-
-/** 卸载时断开所有待渲染观察器 */
-function clearRenderObservers() {
-  renderObservers.forEach((io) => io.disconnect())
-  renderObservers.clear()
-}
-
-
 
 /**
  * 移除增强并清理注入元素。
@@ -351,14 +364,11 @@ function clearRenderObservers() {
  */
 function clearEnhancements(preserveLongCode = true) {
   document.querySelectorAll<HTMLElement>(`.code-block.${BEAUTIFIED_CLASS}`).forEach((block) => {
-    block.classList.remove(BEAUTIFIED_CLASS, WITH_LINENUMBERS_CLASS, ...TEXTURE_CLASSES)
+    block.classList.remove(BEAUTIFIED_CLASS, ...TEXTURE_CLASSES)
     delete block.dataset.cbEnhanced
-    block.style.removeProperty("--cb-linenumber-width")
-    block.style.removeProperty("--cb-line-font-size")
-    block.style.removeProperty("--cb-font-family")
-    // 装饰清理（注册表统一：当前行/统计角标/active guide/长代码条/背景纹理）
+    // 装饰清理（注册表统一：当前行/统计角标/长代码条/背景纹理/折叠箭头）
     cleanupAll(block, preserveLongCode)
-    // 行号列/缩进线/主题栏等全部随 overlay 整体移除（各行号列不在 codeBlock 子树内）
+    // 主题栏/折叠箭头等全部随 overlay 整体移除（不在 codeBlock 子树内）
     removeOverlay(block)
     // 展开代码内折叠并清理状态，恢复原始内容（折叠省略行随 unfoldAll 移除）
     clearFoldState(block)

@@ -119,14 +119,73 @@ function clearBackgroundImageUrl() {
   }
 }
 
-/** CSS 纹理主题 class 列表（纯 CSS 纹理） */
-export const TEXTURE_CLASSES = ["grid", "dots", "matrix", "blueprint", "diagonal", "ripples", "checkerboard", "carbon", "aurora", "honeycomb", "barcode"].map((t) => `cb-bg-${t}`)
+/** CSS 纹理主题 class 列表（须与 codeblock.scss 中 .cb-bg-* 定义一致） */
+export const TEXTURE_CLASSES = [
+  "grid",
+  "dots",
+  "ruled",
+  "columns",
+  "cross",
+  "dotgrid",
+  "stripes",
+  "notebook",
+  "carbon",
+  "graph",
+].map((t) => `cb-bg-${t}`)
 
-/** 应用 CSS 背景纹理主题（通过 class 控制） */
-export function applyBackgroundTexture(codeBlock: HTMLElement, theme: string) {
-  codeBlock.classList.remove(...TEXTURE_CLASSES)
-  if (TEXTURE_CLASSES.includes(`cb-bg-${theme}`)) {
-    codeBlock.classList.add(`cb-bg-${theme}`)
+/** 背景纹理主题 class 前缀 */
+const BG_CLASS_PREFIX = "cb-bg-"
+
+/**
+ * 背景纹理 CSS（按需注入，不在主样式文件全量加载）。
+ * key 为主题名，value 为对应纹理 class 的 CSS 规则。
+ */
+const TEXTURE_CSS: Record<string, string> = {
+  grid: `.code-block.cb-beautified.cb-bg-grid{background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.07) 0 1px,transparent 1px 24px),repeating-linear-gradient(90deg,rgba(0,0,0,.07) 0 1px,transparent 1px 24px)}`,
+  dots: `.code-block.cb-beautified.cb-bg-dots{background-image:radial-gradient(rgba(0,0,0,.18) 1px,transparent 1px);background-size:18px 18px}`,
+  ruled: `.code-block.cb-beautified.cb-bg-ruled{background-image:repeating-linear-gradient(0deg,transparent 0 calc(1.7em - 1px),rgba(0,0,0,.09) calc(1.7em - 1px) 1.7em)}`,
+  columns: `.code-block.cb-beautified.cb-bg-columns{background-image:repeating-linear-gradient(90deg,transparent 0 23px,rgba(0,0,0,.08) 23px 24px)}`,
+  cross: `.code-block.cb-beautified.cb-bg-cross{background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.05) 0 1px,transparent 1px 16px),repeating-linear-gradient(90deg,rgba(0,0,0,.05) 0 1px,transparent 1px 16px)}`,
+  dotgrid: `.code-block.cb-beautified.cb-bg-dotgrid{background-image:radial-gradient(rgba(0,0,0,.14) 1px,transparent 1px);background-size:16px 16px;background-position:8px 8px}`,
+  stripes: `.code-block.cb-beautified.cb-bg-stripes{background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.06) 0 1px,transparent 1px 12px)}`,
+  notebook: `.code-block.cb-beautified.cb-bg-notebook{background-image:repeating-linear-gradient(0deg,transparent 0 calc(1.7em - 1px),rgba(0,0,0,.07) calc(1.7em - 1px) 1.7em),linear-gradient(90deg,rgba(220,80,80,.35) 0 1px,transparent 1px);background-size:auto,56px 100%;background-position:0 0,0 0}`,
+  carbon: `.code-block.cb-beautified.cb-bg-carbon{background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.1) 0 1px,transparent 1px 6px),repeating-linear-gradient(-45deg,rgba(0,0,0,.1) 0 1px,transparent 1px 6px)}`,
+  graph: `.code-block.cb-beautified.cb-bg-graph{background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.06) 0 1px,transparent 1px 5px),repeating-linear-gradient(90deg,rgba(0,0,0,.06) 0 1px,transparent 1px 5px)}`,
+}
+
+/** 已注入的纹理 style 标签（Set<theme>，避免重复注入） */
+const injectedStyles = new Set<string>()
+
+/** 按需注入某主题的纹理 CSS（惰性，首次使用时注入一个 <style>） */
+function ensureTextureStyle(theme: string) {
+  const css = TEXTURE_CSS[theme]
+  if (!css || injectedStyles.has(theme)) {
+    return
+  }
+  injectedStyles.add(theme)
+  const style = document.createElement("style")
+  style.setAttribute("data-cb-texture", theme)
+  style.textContent = css
+  document.head.appendChild(style)
+}
+
+/**
+ * 应用 CSS 背景纹理主题（通过 class 控制）：
+ * 只移除上一次应用的主题 class（用 data 属性记录），不每次 remove 全部纹理 class。
+ */
+function applyBackgroundTexture(codeBlock: HTMLElement, theme: string) {
+  const prev = codeBlock.dataset.cbBgTheme
+  if (prev && prev !== theme) {
+    codeBlock.classList.remove(`${BG_CLASS_PREFIX}${prev}`)
+  }
+  const nextClass = `${BG_CLASS_PREFIX}${theme}`
+  if (TEXTURE_CLASSES.includes(nextClass)) {
+    // 按需注入该主题的纹理 CSS（首次使用才注入 <style>）
+    ensureTextureStyle(theme)
+    codeBlock.classList.add(nextClass)
+    codeBlock.dataset.cbBgTheme = theme
+  } else {
+    delete codeBlock.dataset.cbBgTheme
   }
 }
 

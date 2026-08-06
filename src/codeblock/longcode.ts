@@ -10,8 +10,10 @@
  */
 
 import type { CodeBlockSettings } from "./settings"
+import { getCodeText } from "../utils/dom"
 import { getOverlay } from "../utils/overlay"
 import { countVisibleLines } from "../utils/text-range"
+import { measureLineAt } from "./line-measure-service"
 import {
   registerDecor,
 } from "./registry"
@@ -24,9 +26,7 @@ const DOTS_CLASS = "cb-longcode-dots"
 const WIN_CLASS = "cb-longcode-win"
 const CHROME_CLASS = "cb-longcode-chrome"
 const TERMINAL_CLASS = "cb-longcode-terminal"
-const EKG_CLASS = "cb-longcode-ekg"
 const CODESYM_CLASS = "cb-longcode-codesym"
-const PIXEL_CLASS = "cb-longcode-pixel"
 const FOLDED_ATTR = "cbLongFolded"
 
 interface LongCodeFoldState {
@@ -57,7 +57,7 @@ function updateBtn(btn: HTMLButtonElement, folded: boolean) {
 }
 
 /** 当前是否折叠（data 属性持久化） */
-export function isFolded(codeBlock: HTMLElement): boolean {
+function isFolded(codeBlock: HTMLElement): boolean {
   return codeBlock.dataset[FOLDED_ATTR] === "1"
 }
 
@@ -88,15 +88,15 @@ function appendDots(bar: HTMLElement, dotClasses: string[]) {
   bar.appendChild(dots)
 }
 
-/** 渲染顶部栏主题装饰（mac / windows / ubuntu / chrome / terminal / ekg / codesym / pixel） */
+/** 渲染顶部栏主题装饰（mac / windows / ubuntu / chrome / terminal / codesym） */
 function renderThemeDecor(bar: HTMLElement, themeStyle: string) {
   // 统一标记风格 class
-  const styleClasses = ["mac", "windows", "ubuntu", "chrome", "terminal", "ekg", "codesym", "pixel"].map((s) => `${BAR_CLASS}--${s}`)
+  const styleClasses = ["mac", "windows", "ubuntu", "chrome", "terminal", "codesym"].map((s) => `${BAR_CLASS}--${s}`)
   bar.classList.remove(...styleClasses)
   if (styleClasses.includes(`${BAR_CLASS}--${themeStyle}`)) {
     bar.classList.add(`${BAR_CLASS}--${themeStyle}`)
   }
-  bar.querySelectorAll(`.${DOTS_CLASS}, .${WIN_CLASS}, .${CHROME_CLASS}, .${TERMINAL_CLASS}, .${EKG_CLASS}, .${CODESYM_CLASS}, .${PIXEL_CLASS}`).forEach((el) => el.remove())
+  bar.querySelectorAll(`.${DOTS_CLASS}, .${WIN_CLASS}, .${CHROME_CLASS}, .${TERMINAL_CLASS}, .${CODESYM_CLASS}`).forEach((el) => el.remove())
   if (themeStyle === "mac") {
     // Mac 风格：左侧红黄绿圆点
     appendDots(bar, ["cb-longcode-dot--red", "cb-longcode-dot--yellow", "cb-longcode-dot--green"])
@@ -137,39 +137,46 @@ function renderThemeDecor(bar: HTMLElement, themeStyle: string) {
     cursor.textContent = "_"
     term.appendChild(cursor)
     bar.appendChild(term)
-  } else if (themeStyle === "ekg") {
-    // 心电图：静态 ECG 波形线
-    const ekg = document.createElement("div")
-    ekg.className = EKG_CLASS
-    ekg.innerHTML =
-      `<svg viewBox="0 0 200 24" preserveAspectRatio="none" aria-hidden="true">`
-      + `<path d="M0 12 H30 L36 4 L44 20 L52 8 L58 12 H200" fill="none" stroke="currentColor" stroke-width="1.5"/>`
-      + `</svg>`
-    bar.appendChild(ekg)
   } else if (themeStyle === "codesym") {
     // 代码符号：</> 装饰
     const sym = document.createElement("div")
     sym.className = CODESYM_CLASS
     sym.textContent = "</>"
     bar.appendChild(sym)
-  } else if (themeStyle === "pixel") {
-    // 像素方块：8-bit 问号块（马里奥风格）
-    const px = document.createElement("div")
-    px.className = PIXEL_CLASS
-    px.textContent = "?"
-    bar.appendChild(px)
   }
 }
 
-/**
- * 渲染长代码折叠：顶部主题装饰栏 + 底部「收起/展开」按钮。
- * @param codeBlock 代码块
- * @param lineCount 当前代码行数
- * @param threshold 固定行数阈值
- * @param topNHeight 前 N 行的高度（px，折叠时 max-height 用）
- * @param themeStyle 顶部栏主题风格（"" = 无，mac/windows/terminal/vscode/github/ubuntu/chrome）
- */
 /** 确保顶部主题装饰栏存在（创建/复用，含滚动虚化监听） */
+/** 已安装滚动虚化监听的代码块（防重复绑定） */
+const fadeInstalled = new WeakSet<HTMLElement>()
+
+/**
+ * 安装滚动虚化：滚动 .hljs 时主题栏与按钮同时虚化，停止 300ms 后恢复。
+ * 幂等（WeakSet 防重复），每次长代码/主题栏渲染时调用，确保按钮创建后也生效。
+ */
+function ensureScrollFade(codeBlock: HTMLElement) {
+  if (fadeInstalled.has(codeBlock)) {
+    return
+  }
+  const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
+  if (!hljs) {
+    return
+  }
+  fadeInstalled.add(codeBlock)
+  let fadeTimer = 0
+  hljs.addEventListener("scroll", () => {
+    const bar = getOverlay(codeBlock).querySelector<HTMLElement>(`.${BAR_CLASS}`)
+    bar?.classList.add(BAR_SCROLLING_CLASS)
+    const b = getOverlay(codeBlock).querySelector<HTMLElement>(`.${BTN_CLASS}`)
+    b?.classList.add(BTN_SCROLLING_CLASS)
+    window.clearTimeout(fadeTimer)
+    fadeTimer = window.setTimeout(() => {
+      bar?.classList.remove(BAR_SCROLLING_CLASS)
+      b?.classList.remove(BTN_SCROLLING_CLASS)
+    }, 300)
+  })
+}
+
 function ensureThemeBar(codeBlock: HTMLElement): HTMLElement {
   let bar = getOverlay(codeBlock).querySelector<HTMLElement>(`.${BAR_CLASS}`)
   if (!bar) {
@@ -177,27 +184,13 @@ function ensureThemeBar(codeBlock: HTMLElement): HTMLElement {
     bar.className = BAR_CLASS
     bar.setAttribute("contenteditable", "false")
     getOverlay(codeBlock).appendChild(bar)
-    // 滚动查看时装饰栏与按钮虚化，停止滚动后恢复
-    const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
-    if (hljs) {
-      let fadeTimer = 0
-      hljs.addEventListener("scroll", () => {
-        bar?.classList.add(BAR_SCROLLING_CLASS)
-        const b = getOverlay(codeBlock).querySelector<HTMLElement>(`.${BTN_CLASS}`)
-        b?.classList.add(BTN_SCROLLING_CLASS)
-        window.clearTimeout(fadeTimer)
-        fadeTimer = window.setTimeout(() => {
-          bar?.classList.remove(BAR_SCROLLING_CLASS)
-          b?.classList.remove(BTN_SCROLLING_CLASS)
-        }, 300)
-      })
-    }
   }
+  ensureScrollFade(codeBlock)
   return bar
 }
 
 /** 短代码块主题装饰栏：仅顶部风格装饰，无收起/展开按钮 */
-export function renderThemeBar(codeBlock: HTMLElement, themeStyle: string) {
+function renderThemeBar(codeBlock: HTMLElement, themeStyle: string) {
   const bar = ensureThemeBar(codeBlock)
   // 短代码无折叠：确保不显示收起按钮与折叠状态
   bar.querySelector(`.${BTN_CLASS}`)?.remove()
@@ -205,7 +198,7 @@ export function renderThemeBar(codeBlock: HTMLElement, themeStyle: string) {
   renderThemeDecor(bar, themeStyle)
 }
 
-export function renderLongCodeBar(
+function renderLongCodeBar(
   codeBlock: HTMLElement,
   lineCount: number,
   threshold: number,
@@ -251,7 +244,8 @@ export function renderLongCodeBar(
 }
 
 /** 完整清理长代码折叠（卸载时调用，恢复完整显示并清除状态） */
-export function clearLongCodeBar(codeBlock: HTMLElement) {
+function clearLongCodeBar(codeBlock: HTMLElement) {
+  fadeInstalled.delete(codeBlock)
   getOverlay(codeBlock).querySelector(`.${BAR_CLASS}`)?.remove()
   getOverlay(codeBlock).querySelector(`.${BTN_CLASS}`)?.remove()
   applyFold(codeBlock, false, 0)
@@ -260,7 +254,7 @@ export function clearLongCodeBar(codeBlock: HTMLElement) {
 }
 
 /**
- * 长代码条整体调度（linenumbers 渲染时调用一次，内部策略自管）：
+ * 长代码条整体调度（代码块增强时调用一次，内部策略自管）：
  * - 主题栏开关关闭 → 完整清理
  * - 长代码 + 折叠开启 → 收起按钮 + 折叠态
  * - 否则仅顶部主题装饰栏（短代码也显示装饰，无收起按钮）
@@ -270,8 +264,6 @@ export function renderLongCodeSection(
   hljs: HTMLElement,
   settings: CodeBlockSettings,
   text: string,
-  tops: number[],
-  heightAt: (i: number) => number,
 ) {
   const showTheme = settings.themeStyleEnabled && settings.themeStyle
   if (!showTheme) {
@@ -288,21 +280,26 @@ export function renderLongCodeSection(
     renderThemeBar(codeBlock, settings.themeStyle)
     return
   }
-  const lastIdx = Math.min(n, tops.length) - 1
+  // 只测量阈值行（第 n 行）的顶部与高度，用于收起高度
+  const {
+    top,
+    height,
+  } = measureLineAt(hljs, text, Math.min(n, lineCount) - 1)
   const hljsStyle = getComputedStyle(hljs)
   const padBottom = Number.parseFloat(hljsStyle.paddingBottom) || 0
   const borderV = (Number.parseFloat(hljsStyle.borderTopWidth) || 0)
     + (Number.parseFloat(hljsStyle.borderBottomWidth) || 0)
-  const topNHeight = tops.length > 0 && lastIdx >= 0
-    ? tops[lastIdx] + heightAt(lastIdx) + padBottom + borderV
-    : 0
+  const topNHeight = top > 0 ? top + height + padBottom + borderV : 0
   renderLongCodeBar(codeBlock, lineCount, n, topNHeight, settings.themeStyle)
 }
 
 registerDecor({
   selfSelector: ".cb-longcode-bar, .cb-longcode-btn",
-  enhance: () => {
-    // 长代码条由行号渲染流程（renderLongCodeBar）触发，此处不重复执行
+  enhance: (ctx) => {
+    // 长代码条/主题装饰栏渲染入口（原由行号渲染流程触发，行号列删除后改由注册表驱动）
+    if (ctx.hljs) {
+      renderLongCodeSection(ctx.codeBlock, ctx.hljs, ctx.settings, getCodeText(ctx.hljs))
+    }
   },
   cleanup: (codeBlock, preserve) => {
     if (!preserve) {

@@ -2,6 +2,7 @@
  * 代码统计角标：代码块底部右下角显示行数 / 字符数。
  * 低透明度、pointer-events none，不影响滚动与交互。
  */
+import { getCodeText } from "../utils/dom"
 import { getOverlay } from "../utils/overlay"
 import { countVisibleLines } from "../utils/text-range"
 import {
@@ -21,19 +22,19 @@ function updateStats(codeBlock: HTMLElement) {
   if (!hljs || !badge) {
     return
   }
-  const text = hljs.textContent ?? ""
+  const text = getCodeText(hljs)
   const lines = countVisibleLines(text)
   const chars = text.length
   badge.textContent = `${lines} 行 · ${chars} 字符`
 }
 
 /** 初始化代码统计角标（开启时创建并跟随输入更新，关闭时移除） */
-export function initCodeStats(codeBlock: HTMLElement, enabled: boolean) {
-  let badge = getOverlay(codeBlock).querySelector<HTMLElement>(`.${STATS_CLASS}`)
+function initCodeStats(codeBlock: HTMLElement, enabled: boolean) {
   if (!enabled) {
     removeCodeStats(codeBlock)
     return
   }
+  let badge = getOverlay(codeBlock).querySelector<HTMLElement>(`.${STATS_CLASS}`)
   // 先解除旧监听（设置开关/重扫可能重复初始化）
   controllers.get(codeBlock)?.abort()
   const ac = new AbortController()
@@ -50,7 +51,7 @@ export function initCodeStats(codeBlock: HTMLElement, enabled: boolean) {
 }
 
 /** 移除统计角标并解除监听 */
-export function removeCodeStats(codeBlock: HTMLElement) {
+function removeCodeStats(codeBlock: HTMLElement) {
   controllers.get(codeBlock)?.abort()
   controllers.delete(codeBlock)
   getOverlay(codeBlock).querySelector(`.${STATS_CLASS}`)?.remove()

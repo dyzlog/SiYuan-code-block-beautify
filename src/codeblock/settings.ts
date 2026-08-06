@@ -30,20 +30,12 @@ export interface CodeBlockSettings {
   currentLineHighlight: boolean
   /** 当前行高亮颜色（空 = 跟随主题默认半透明） */
   currentLineColor: string
-  /** 显示行号 */
-  showLineNumber: boolean
   /** 代码内折叠（折叠 for/if/函数等结构） */
   foldEnabled: boolean
-  /** 代码缩进竖线（indent guides） */
-  showIndentGuides: boolean
-  /** 缩进竖线颜色（CSS 颜色值，空 = 跟随主题默认淡灰） */
-  indentGuideColor: string
-  /** 彩虹缩进竖线（不同缩进层级不同颜色，优先于自定义色） */
-  rainbowIndent: boolean
-  /** active guide 高亮（光标所在缩进级别的竖线加深，VS Code 风格） */
-  activeGuideHighlight: boolean
   /** 代码统计角标（底部显示行数/字符数） */
   codeStats: boolean
+  /** 思源原生行号开关（同步 window.siyuan.config.editor.codeSyntaxHighlightLineNum） */
+  showLineNumber: boolean
   /** 语法高亮主题（空 = 跟随思源设置，否则覆盖为指定 hljs 主题） */
   highlightTheme: string
   /** 长代码折叠（超出阈值行数显示「只显示固定行」按钮） */
@@ -70,13 +62,9 @@ export const DEFAULT_SETTINGS: CodeBlockSettings = {
   shadowSize: 8,
   currentLineHighlight: true,
   currentLineColor: "",
-  showLineNumber: true,
   foldEnabled: true,
-  showIndentGuides: true,
-  indentGuideColor: "",
-  rainbowIndent: true,
-  activeGuideHighlight: true,
   codeStats: true,
+  showLineNumber: true,
   highlightTheme: "",
   longCodeFold: true,
   longCodeThreshold: 20,
@@ -115,7 +103,6 @@ export function applySettingsVars(s: CodeBlockSettings) {
   root.style.setProperty("--cb-bg-color", s.backgroundColor)
   root.style.setProperty("--cb-bg-blur", `${s.backgroundBlur}px`)
   root.style.setProperty("--cb-bg-mask-opacity", `${s.backgroundMaskOpacity}%`)
-  root.style.setProperty("--cb-indent-guide-color", s.indentGuideColor)
   root.style.setProperty("--cb-current-line-color", s.currentLineColor)
   // 代码字体（空值时回退跟随主题）
   root.style.setProperty("--cb-code-font-family", s.codeFontFamily)

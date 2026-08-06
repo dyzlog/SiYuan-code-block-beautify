@@ -8,6 +8,7 @@
  *   进入编辑自动展开恢复，避免干扰思源的数据同步
  */
 import type { FoldRegion } from "./fold"
+import { getCodeText } from "../utils/dom"
 import {
   countVisibleLines,
   getLineStarts,
@@ -17,7 +18,7 @@ import { findFoldRegions } from "./fold"
 import { getCodeBlockLanguage } from "./language"
 import { rerenderBlock } from "./registry"
 
-/** 折叠省略行类名（enhancer 兜底清理 / linenumbers 复用） */
+/** 折叠省略行类名（enhancer 兜底清理 / 折叠功能复用） */
 export const ELLIPSIS_CLASS = "cb-fold-ellipsis"
 
 const FOLDED_CLASS = "cb-folded"
@@ -56,7 +57,7 @@ export function getFoldState(codeBlock: HTMLElement): FoldState | undefined {
 }
 
 /** 折叠 / 展开某个区域（自动选择模式） */
-export function toggleFold(codeBlock: HTMLElement, startLine: number) {
+function toggleFold(codeBlock: HTMLElement, startLine: number) {
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
   if (!hljs) {
     return
@@ -107,20 +108,6 @@ export function unfoldAll(codeBlock: HTMLElement) {
   }
 }
 
-/** 清理失效折叠状态（省略行已被思源重渲染移除时） */
-export function pruneFoldStates(codeBlock: HTMLElement) {
-  const state = foldStates.get(codeBlock)
-  if (!state) {
-    return
-  }
-  state.areas = state.areas.filter((a) => a.ellipsis.isConnected)
-  if (state.areas.length === 0) {
-    foldStates.delete(codeBlock)
-    // 省略行被外部移除（思源 lazy 渲染等）导致折叠状态清空时，恢复可编辑
-    codeBlock.querySelector<HTMLElement>(".hljs")?.setAttribute("contenteditable", "true")
-  }
-}
-
 /** 完整清除代码块的折叠状态（展开所有区域 + 清理 class），供卸载/设置变更使用 */
 export function clearFoldState(codeBlock: HTMLElement) {
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
@@ -141,7 +128,7 @@ export function clearFoldState(codeBlock: HTMLElement) {
 
 /** 行元素模式：class 隐藏/恢复 */
 function toggleFoldByClass(hljs: HTMLElement, lineEls: HTMLElement[], startLine: number, language: string) {
-  const region = findFoldRegions(hljs.textContent ?? "", language).find((r) => r.start === startLine)
+  const region = findFoldRegions(getCodeText(hljs), language).find((r) => r.start === startLine)
   if (!region) {
     return
   }
@@ -167,7 +154,7 @@ function toggleFoldByText(codeBlock: HTMLElement, hljs: HTMLElement, startLine: 
     unfoldTextArea(codeBlock, hljs, existing, state)
     return
   }
-  const text = hljs.textContent ?? ""
+  const text = getCodeText(hljs)
   // 优先使用折叠前记录的区域（折叠态下文本已变化，不能重新解析）
   const region = state?.regions.find((r) => r.start === startLine)
     ?? findFoldRegions(text, language).find((r) => r.start === startLine)
@@ -204,7 +191,7 @@ function foldTextArea(codeBlock: HTMLElement, hljs: HTMLElement, region: FoldReg
     start: region.start - shift,
     end: region.end - shift,
   }
-  const text = hljs.textContent ?? ""
+  const text = getCodeText(hljs)
   const starts = getLineStarts(text)
   const startOff = starts[curRegion.start + 1]
   if (startOff === undefined) {

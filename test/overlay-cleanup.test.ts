@@ -39,6 +39,7 @@ if (!("ResizeObserver" in window)) {
   window.ResizeObserver = class {
     observe() {}
     disconnect() {}
+    unobserve() {}
   } as unknown as typeof ResizeObserver
 }
 // vitest jsdom 环境下 Node 全局可能缺失（enhancer 的 MutationObserver 回调使用）
@@ -76,14 +77,14 @@ describe("代码块被移除时 overlay 清理（思源动态加载场景）", (
     document.body.appendChild(parent)
 
     // 等待首轮扫描完成增强（scheduleIdle 回退为 setTimeout ~120ms）
-    await sleep(300)
+    await sleep(600)
     const overlay = parent.querySelector(".cb-overlay")
     expect(overlay).not.toBeNull()
 
     // 模拟思源动态加载：只移除代码块自身。
     // overlay 是 codeBlock 的兄弟节点，不会随其自动移除 → 必须被插件清理
     block.remove()
-    await sleep(300) // 等待 MutationObserver 处理 removedNodes
+    await sleep(600) // 等待 MutationObserver 处理 removedNodes
 
     const leftovers = document.querySelectorAll(".cb-overlay")
     expect(leftovers.length).toBe(0)
@@ -116,12 +117,12 @@ describe("代码块被移除时 overlay 清理（思源动态加载场景）", (
     parent.append(b1, b2)
     document.body.appendChild(parent)
 
-    await sleep(300)
+    await sleep(600)
     expect(parent.querySelectorAll(".cb-overlay").length).toBe(2)
 
     // 整个容器（如 protyle 重建）被移除
     parent.remove()
-    await sleep(300)
+    await sleep(600)
 
     expect(document.querySelectorAll(".cb-overlay").length).toBe(0)
 

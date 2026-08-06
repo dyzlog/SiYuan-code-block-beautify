@@ -3,11 +3,12 @@
  */
 import { getLineStarts } from "./text-range"
 
-/** 浏览器是否支持 translate 独立合成属性（支持则优先使用，性能更好） */
-const SUPPORTS_TRANSLATE = "translate" in document.documentElement.style
+/** 代码块增强标记（dataset.cbEnhanced 的值） */export const ENHANCED_VALUE = "1"
 
-/** 代码块增强标记（dataset.cbEnhanced 的值） */
-export const ENHANCED_VALUE = "1"
+/** 读取代码块 .hljs 的纯文本（空值兜底） */
+export function getCodeText(hljs: HTMLElement | null | undefined): string {
+  return hljs?.textContent ?? ""
+}
 
 /** 遍历根节点下所有文本节点 */
 export function forEachTextNode(root: Node, cb: (text: Text) => void) {
@@ -16,21 +17,6 @@ export function forEachTextNode(root: Node, cb: (text: Text) => void) {
   while (node) {
     cb(node)
     node = walker.nextNode() as Text | null
-  }
-}
-
-/** 设置元素的滚动平移偏移（优先 translate 独立属性，回退 transform） */
-export function setScrollOffset(el: HTMLElement, y: number) {
-  if (SUPPORTS_TRANSLATE) {
-    const next = `0 ${y}px`
-    if (el.style.translate !== next) {
-      el.style.translate = next
-    }
-  } else {
-    const next = `translateY(${y}px)`
-    if (el.style.transform !== next) {
-      el.style.transform = next
-    }
   }
 }
 
