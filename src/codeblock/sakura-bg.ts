@@ -64,19 +64,18 @@ function sunRune(cx: number, cy: number, coreR: number, rayR: number, points = 1
   return parts.join("\n    ")
 }
 
-/** 凯尔特结符文（多层交叉椭圆交织，营造精妙符号感） */
+/** 凯尔特结符文（清爽 4 瓣交叉，避免过密） */
 function knotRune(cx: number, cy: number, r: number): string {
   const parts: string[] = []
   // 外圈
   parts.push(circle(cx, cy, r, 1.5))
-  // 6 个交叉椭圆（每 30° 旋转，形成密集交织结）
-  for (let i = 0; i < 6; i++) {
-    const rot = i * 30
-    parts.push(`<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="${(r * 0.85).toFixed(1)}" ry="${(r * 0.5).toFixed(1)}" transform="rotate(${rot} ${cx.toFixed(1)} ${cy.toFixed(1)})" fill="none" stroke="${COLOR}" stroke-width="1.2"/>`)
+  // 4 瓣交叉椭圆（每 45° 旋转，清爽结扣）
+  for (let i = 0; i < 4; i++) {
+    const rot = i * 45
+    parts.push(`<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="${(r * 0.8).toFixed(1)}" ry="${(r * 0.4).toFixed(1)}" transform="rotate(${rot} ${cx.toFixed(1)} ${cy.toFixed(1)})" fill="none" stroke="${COLOR}" stroke-width="1.2"/>`)
   }
-  // 内圈 + 中心点
-  parts.push(circle(cx, cy, r * 0.35, 1.2, 0.8))
-  parts.push(circle(cx, cy, r * 0.12, 1, 0.9))
+  // 中心点
+  parts.push(circle(cx, cy, r * 0.1, 1, 0.9))
   return parts.join("\n    ")
 }
 
@@ -146,9 +145,9 @@ function magicCircle(scale: number, full: boolean): string {
       parts.push(line(vx, vy, mx, my, 0.8, 0.4))
     }
 
-    // 4. 大内环（0.6R，与五芒星顶点相交）+ 细密刻度带（更细但清晰）
+    // 4. 大内环（0.6R，与五芒星顶点相交）+ 内圈刻度带（加长更明显，画在五芒星前）
     parts.push(circle(0, 0, 0.6 * r, 2, 0.85))
-    parts.push(tickRing(0.6 * r, 0.955, 1.0))
+    parts.push(tickRing(0.6 * r, 0.94, 1.0))
 
     // 5. 核心五芒星（后画，不被放射线割断）
     const star: string[] = []
@@ -226,47 +225,43 @@ function tickRing2(cx: number, cy: number, radius: number, count: number, innerF
   return parts.join("\n    ")
 }
 
-/** 新月形刻度轨道：双 Arc 弧带（右上 → 右下大弧 → 左下偏心圆）+ 轨道齿痕 */
+/**
+ * 新月形刻度轨道：双弧带（限制在 0.55R-0.85R 环带内，不外凸越界）。
+ * 起点锁在右侧内环边缘，经右下弯，终到偏心圆上方。
+ */
 function crescentTrack(r: number): string {
   const parts: string[] = []
-  // 起点：右上 (0.5R, -0.45R)；终点：左下偏心圆上侧 (-0.35R, 0.25R)
-  const sx = 0.5 * r
-  const sy = -0.45 * r
+  // 起点：右侧内环边缘 (0.6R, 0)；终点：偏心圆上方 (-0.35R, 0.05R)
+  const sx = 0.6 * r
+  const sy = 0
   const ex = -0.35 * r
-  const ey = 0.25 * r
-  // 外弧半径（大弧，向右下弯）
-  const arcR = 0.85 * r
-  // 外弧：A rx ry x-rot large-arc sweep x y
-  parts.push(`<path d="M ${sx.toFixed(1)} ${sy.toFixed(1)} A ${arcR.toFixed(1)} ${arcR.toFixed(1)} 0 1 1 ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.5"/>`)
-  // 内弧（偏移 0.06R，半径略小）
+  const ey = 0.05 * r
+  // 两段弧，半径限制在环带内（0.7R），圆心分别在起点/终点连线的两侧
+  // 第一段：起点 → 中点（右下），半径 0.7R（向内凹，不外凸）
+  const midX = 0.15 * r
+  const midY = 0.55 * r
+  // 用经过三点的圆弧（起点/中点/终点），保证在环带内
+  const arcR = 0.7 * r
+  // 外弧：三段式圆弧路径（起点→中点→终点）
+  parts.push(`<path d="M ${sx.toFixed(1)} ${sy.toFixed(1)} A ${arcR.toFixed(1)} ${arcR.toFixed(1)} 0 0 1 ${midX.toFixed(1)} ${midY.toFixed(1)} A ${arcR.toFixed(1)} ${arcR.toFixed(1)} 0 0 1 ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.5"/>`)
+  // 内弧（偏移 0.06R，向圆心方向）
   const off = 0.06 * r
-  const innerR = arcR - off * 0.6
-  const innerSx = sx - off * 0.5
-  const innerSy = sy + off * 0.5
-  const innerEx = ex + off * 0.5
-  const innerEy = ey - off * 0.5
-  parts.push(`<path d="M ${innerSx.toFixed(1)} ${innerSy.toFixed(1)} A ${innerR.toFixed(1)} ${innerR.toFixed(1)} 0 1 1 ${innerEx.toFixed(1)} ${innerEy.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.2" opacity="0.8"/>`)
-  // 轨道齿痕：沿外弧 20 个等距点，垂直短线
-  for (let i = 0; i < 20; i++) {
-    const t = i / 19
-    // 圆弧参数插值：圆心在起点/终点中垂线上
-    const midX = (sx + ex) / 2
-    const midY = (sy + ey) / 2
-    const dx = ex - sx
-    const dy = ey - sy
-    const dist = Math.hypot(dx, dy) || 1
-    // 圆心（弧在右侧，圆心在中垂线左侧）
-    const h = Math.sqrt(Math.max(0, arcR * arcR - (dist / 2) * (dist / 2)))
-    const cx = midX - h * (-dy / dist)
-    const cy = midY - h * (dx / dist)
-    const startAngle = Math.atan2(sy - cy, sx - cx)
-    const endAngle = Math.atan2(ey - cy, ex - cx)
-    const angle = startAngle + (endAngle - startAngle) * t
-    const bx = cx + arcR * Math.cos(angle)
-    const by = cy + arcR * Math.sin(angle)
-    // 法线方向（径向）
-    const nx = (bx - cx) / arcR
-    const ny = (by - cy) / arcR
+  const innerR = arcR - off
+  parts.push(`<path d="M ${(sx - off).toFixed(1)} ${sy.toFixed(1)} A ${innerR.toFixed(1)} ${innerR.toFixed(1)} 0 0 1 ${(midX - off * 0.4).toFixed(1)} ${(midY - off * 0.4).toFixed(1)} A ${innerR.toFixed(1)} ${innerR.toFixed(1)} 0 0 1 ${(ex + off * 0.5).toFixed(1)} ${(ey + off * 0.5).toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.2" opacity="0.8"/>`)
+  // 轨道齿痕：沿外弧参数采样（两段各 10 个）
+  const sample = (ax: number, ay: number, bx: number, by: number, cxx: number, cyy: number, t: number): [number, number] => {
+    // 圆弧参数：以三点定圆插值
+    const u = (1 - t)
+    return [u * u * ax + 2 * u * t * cxx + t * t * bx, u * u * ay + 2 * u * t * cyy + t * t * by]
+  }
+  // 用二次贝塞尔近似采样（通过三点：起点/中点/终点）
+  for (let i = 0; i <= 18; i++) {
+    const t = i / 18
+    const [bx, by] = sample(sx, sy, ex, ey, midX, midY, t)
+    // 径向法线（指向圆心方向：原点方向）
+    const dist = Math.hypot(bx, by) || 1
+    const nx = bx / dist
+    const ny = by / dist
     const hl = 0.035 * r
     parts.push(line(bx - nx * hl, by - ny * hl, bx + nx * hl, by + ny * hl, 1, 0.7))
   }
