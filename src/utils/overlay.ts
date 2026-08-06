@@ -26,6 +26,11 @@ const overlayMap = new WeakMap<HTMLElement, HTMLElement>()
 const scrollerMap = new WeakMap<HTMLElement, HTMLElement | null>()
 /** 活跃的 codeBlock 集合（WeakMap 不可遍历，滚动/清理时需要遍历） */
 const activeBlocks = new Set<HTMLElement>()
+/** overlay 的静态视口位置缓存（创建时记录，transform 前的位置，供定位基准） */
+const staticPositions = new WeakMap<HTMLElement, {
+  left: number
+  top: number
+}>()
 /** 共享 ResizeObserver（单实例观察所有增强块，替代每块一个 RO） */
 let sharedResizeObserver: ResizeObserver | null = null
 
@@ -37,20 +42,34 @@ function ensureSharedResizeObserver() {
   sharedResizeObserver = new ResizeObserver((entries) => {
     for (const entry of entries) {
       const cb = entry.target as HTMLElement
+      // 父容器尺寸变化（上方内容增删/折叠/懒加载）→ 重新定位子块 overlay
+      if (!cb.classList.contains("cb-overlay") && !cb.matches(".code-block")) {
+        for (const child of cb.querySelectorAll<HTMLElement>(".code-block")) {
+          const ov = overlayMap.get(child)
+          if (child.isConnected && ov?.isConnected) {
+            syncOverlay(child, ov)
+          }
+        }
+        continue
+      }
       const ov = overlayMap.get(cb)
       if (cb.isConnected && ov?.isConnected) {
-        // 布局变化后刷新 offsetTop 缓存 + 重新定位
-        cacheBlockOffset(cb)
+        // 布局变化后重新定位
         syncOverlay(cb, ov)
       }
     }
   })
 }
 
-/** 开始观察某代码块（布局变化时重新定位 overlay） */
+/** 开始观察某代码块及其父容器（布局/内容变化时重新定位 overlay） */
 function observeBlockResize(codeBlock: HTMLElement) {
   ensureSharedResizeObserver()
   sharedResizeObserver?.observe(codeBlock)
+  // 观察父容器：上方内容增删/折叠/懒加载导致块位置变化时，刷新 offsetTop 缓存
+  const parent = codeBlock.parentElement
+  if (parent && !parent.classList.contains("cb-overlay")) {
+    sharedResizeObserver?.observe(parent)
+  }
 }
 
 /** 停止观察某代码块 */
@@ -61,16 +80,13 @@ function unobserveBlockResize(codeBlock: HTMLElement) {
 /** 一次读取 overlay 同步所需的全部几何信息（读阶段，触发一次回流） */
 interface OverlayGeom {
   blockRect: DOMRect
-  parentRect: DOMRect | null
   scrollerRect: DOMRect | null
 }
 
-function readGeom(codeBlock: HTMLElement, ov: HTMLElement): OverlayGeom {
-  const parent = ov.offsetParent
+function readGeom(codeBlock: HTMLElement): OverlayGeom {
   const scroller = scrollerMap.get(codeBlock)
   return {
     blockRect: codeBlock.getBoundingClientRect(),
-    parentRect: parent ? parent.getBoundingClientRect() : null,
     scrollerRect: scroller ? scroller.getBoundingClientRect() : null,
   }
 }
@@ -83,23 +99,26 @@ function setStyle(el: HTMLElement, prop: "left" | "top" | "width" | "height" | "
   }
 }
 
-function applyGeom(_codeBlock: HTMLElement, ov: HTMLElement, g: OverlayGeom) {
+function applyGeom(codeBlock: HTMLElement, ov: HTMLElement, g: OverlayGeom) {
   const {
     blockRect,
-    parentRect,
     scrollerRect,
   } = g
-  // 位置：absolute 固定在 offsetParent 原点，用 transform 平移表达实际位置——
-  // transform 走合成层不触发回流（滚动只做 GPU 合成，长文档滚动不卡）
-  let x: number
-  let y: number
-  if (parentRect) {
-    x = blockRect.left - parentRect.left
-    y = blockRect.top - parentRect.top
+  // 位置：transform 相对 overlay 的「静态位置」（创建时记录的初始视口坐标）。
+  // 用 blockRect - staticRect：两者都是视口坐标，滚动时同步变化，
+  // 差值 = codeBlock 相对 overlay 静态位置的偏移（恒定）→ transform 不变，
+  // overlay 随内容滚动天然跟随。静态位置缓存避免「当前 ovRect 自指」错乱，
+  // 也不依赖 offsetParent 一致性（offsetTop 差值在列表/嵌套块下坐标系不同会乱位）。
+  const staticRect = staticPositions.get(ov)
+  let x = 0
+  let y = 0
+  if (staticRect) {
+    x = blockRect.left - staticRect.left
+    y = blockRect.top - staticRect.top
   } else {
-    // 兜底（理论上 .protyle 是 relative，offsetParent 恒存在）：文档坐标
-    x = blockRect.left + window.scrollX
-    y = blockRect.top + window.scrollY
+    // 无静态位置缓存（理论上 getOverlay 创建时必缓存）：退化为相对父容器
+    x = codeBlock.offsetLeft - ov.offsetLeft
+    y = codeBlock.offsetTop - ov.offsetTop
   }
   const t = `translate(${x}px, ${y}px)`
   if (ov.style.transform !== t) {
@@ -159,55 +178,7 @@ function syncOverlay(codeBlock: HTMLElement, ov: HTMLElement) {
       syncedThisFrame = new WeakSet<HTMLElement>()
     })
   }
-  applyGeom(codeBlock, ov, readGeom(codeBlock, ov))
-}
-
-/** 缓存每个块的文档偏移（offsetTop 相对 offsetParent，滚动时恒定；创建时读一次避免每帧回流） */
-const cachedOffsetTop = new WeakMap<HTMLElement, number>()
-
-/** 记录/更新块的文档偏移缓存（getOverlay 创建时调用） */
-function cacheBlockOffset(codeBlock: HTMLElement) {
-  cachedOffsetTop.set(codeBlock, codeBlock.offsetTop)
-}
-
-/**
- * 滚动同步：scroll 事件在当前帧绘制前触发，同步更新使 overlay 与代码块
- * 同帧绘制（无 rAF 一帧滞后 → 快速滚动不分离）。
- * 性能：用缓存的 offsetTop（滚动时恒定，无需每帧读）+ scrollTop 估算块位置，
- * 只对接近视口的块执行 getBoundingClientRect（长文档滚动不全量回流）。
- */
-function onScroll() {
-  const margin = 1000
-  const jobs: Array<[HTMLElement, HTMLElement, OverlayGeom]> = []
-  const farAway: Array<[HTMLElement, HTMLElement]> = []
-  const first = [...activeBlocks][0]
-  const scroller = first ? scrollerMap.get(first) : null
-  const scrollTop = scroller?.scrollTop ?? 0
-  const viewH = window.innerHeight
-  // 阶段 1a：廉价预筛（读缓存 offsetTop + scrollTop，均不触发回流）
-  // 近块 → 后续读几何定位；远块（>margin）→ 直接标记隐藏，避免残留
-  for (const cb of activeBlocks) {
-    const ov = overlayMap.get(cb)
-    if (!cb.isConnected || !ov?.isConnected) {
-      continue
-    }
-    const docTop = cachedOffsetTop.get(cb) ?? cb.offsetTop
-    const approxTop = docTop - scrollTop
-    if (approxTop > -margin && approxTop < viewH + margin) {
-      jobs.push([cb, ov, readGeom(cb, ov)])
-    } else {
-      farAway.push([cb, ov])
-    }
-  }
-  // 阶段 2：批量写（近块定位 + 远块隐藏）
-  for (const [cb, ov, g] of jobs) {
-    applyGeom(cb, ov, g)
-  }
-  for (const [, ov] of farAway) {
-    // 滚出远超视口的块：隐藏 overlay（applyGeom 的可见性判断只在候选内执行，
-    // 远块不进候选就会残留在上次位置——这里强制隐藏）
-    setStyle(ov, "visibility", "hidden")
-  }
+  applyGeom(codeBlock, ov, readGeom(codeBlock))
 }
 
 let scrollInstalled = false
@@ -218,6 +189,69 @@ function ensureScrollSync() {
   }
   scrollInstalled = true
   document.addEventListener("scroll", onScroll, true)
+}
+
+/**
+ * 销毁 overlay 系统：卸载滚动监听 + 断开共享 ResizeObserver + 清空所有状态。
+ * 供插件卸载时调用，避免 document 级监听与观察器泄漏。
+ */
+export function destroyOverlaySystem() {
+  if (scrollInstalled) {
+    document.removeEventListener("scroll", onScroll, true)
+    scrollInstalled = false
+  }
+  sharedResizeObserver?.disconnect()
+  sharedResizeObserver = null
+  // 清空全部活跃块（其 overlay DOM 由 removeOverlay 逐个移除）
+  for (const cb of activeBlocks) {
+    const ov = overlayMap.get(cb)
+    if (ov) {
+      ov.remove()
+      overlayMap.delete(cb)
+    }
+    scrollerMap.delete(cb)
+  }
+  activeBlocks.clear()
+}
+
+/**
+ * 滚动同步：scroll 事件在当前帧绘制前触发，同步更新使 overlay 与代码块
+ * 同帧绘制（无 rAF 一帧滞后 → 快速滚动不分离）。
+ * 性能：直接对活跃块读真实几何（getBoundingClientRect 视口坐标，天然正确），
+ * 批量读后批量写（一次回流）。不做 offsetTop/scrollTop 合成预筛——
+ * 那套近似在 .protyle/.protyle-content/.protyle-wysiwyg 多层坐标系下必然出错
+ * （曾导致「滚动即消失」：视口内块被误判为远块而隐藏）。
+ * 活跃块 = 已增强块（仅用户滚动经过的），长文档滚动不会全量回流。
+ */
+function onScroll() {
+  const jobs: Array<[HTMLElement, HTMLElement, OverlayGeom]> = []
+  const farAway: Array<[HTMLElement, HTMLElement]> = []
+  // 阶段 1：批量读真实几何（一次回流）
+  for (const cb of activeBlocks) {
+    const ov = overlayMap.get(cb)
+    if (!cb.isConnected || !ov?.isConnected) {
+      continue
+    }
+    const g = readGeom(cb)
+    const visible = g.scrollerRect
+      ? g.blockRect.bottom > g.scrollerRect.top
+      && g.blockRect.top < g.scrollerRect.bottom
+      && g.blockRect.right > g.scrollerRect.left
+      && g.blockRect.left < g.scrollerRect.right
+      : true
+    if (visible) {
+      jobs.push([cb, ov, g])
+    } else {
+      farAway.push([cb, ov])
+    }
+  }
+  // 阶段 2：批量写（可见块定位 + 不可见块隐藏，避免残留在上次位置）
+  for (const [cb, ov, g] of jobs) {
+    applyGeom(cb, ov, g)
+  }
+  for (const [, ov] of farAway) {
+    setStyle(ov, "visibility", "hidden")
+  }
 }
 
 /**
@@ -259,7 +293,12 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
     overlayMap.set(codeBlock, ov)
     activeBlocks.add(codeBlock)
     scrollerMap.set(codeBlock, codeBlock.closest<HTMLElement>(".protyle-content"))
-    cacheBlockOffset(codeBlock)
+    // 记录静态位置（此刻无 transform，getBoundingClientRect = 初始视口坐标）
+    const staticRect = ov.getBoundingClientRect()
+    staticPositions.set(ov, {
+      left: staticRect.left,
+      top: staticRect.top,
+    })
     ensureWheelForward(codeBlock, ov)
     // 位置/尺寸变化自动跟随：共享 ResizeObserver 观察该块（布局变化时重新定位）
     if ("ResizeObserver" in window) {

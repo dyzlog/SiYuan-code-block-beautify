@@ -11,6 +11,7 @@ import {
   scheduleIdle,
 } from "../utils/dom"
 import {
+  destroyOverlaySystem,
   removeOverlay,
 } from "../utils/overlay"
 import {
@@ -24,6 +25,7 @@ import {
   cleanupAll,
   enhanceAll,
   getSelfSelectors,
+  setEnhanceBlock,
 } from "./registry"
 import {
   handleEditingMutation,
@@ -82,6 +84,9 @@ function selfSelectorCache(): string {
 export function initCodeBlockEnhancer(p: Plugin, s: CodeBlockSettings) {
   plugin = p
   settings = s
+  // 注入完整增强入口供装饰模块防御调用（懒加载块从未被 enhance 时，
+  // rerenderBlock/折叠操作可借此触发完整渲染，而非只有箭头层）
+  setEnhanceBlock(enhance)
   p.eventBus.on("loaded-protyle-dynamic", onProtyleEvent)
   // 文档关闭/切换前清理注入元素，防止被思源序列化保存导致污染
   p.eventBus.on("destroy-protyle", onProtyleDestroy)
@@ -184,6 +189,10 @@ export function destroyCodeBlockEnhancer() {
   // 卸载时完整清理（含长代码折叠状态）
   clearPendingEnhanceObservers()
   clearEnhancements(false)
+  // 销毁 overlay 系统（卸载 scroll 监听 + 断开 ResizeObserver + 清空状态）
+  destroyOverlaySystem()
+  // 清空完整增强入口（fold-arrows 防御调用将失效，符合卸载语义）
+  setEnhanceBlock(() => {})
 
 
 
@@ -272,9 +281,14 @@ function ensureEnhanceObserver() {
   enhanceObserver = new IntersectionObserver((entries) => {
     for (const entry of entries) {
       const block = entry.target as HTMLElement
+      if (!entry.isIntersecting) {
+        // 块当前不在视口（或 200px 预加载区）：保留观察，滚动进入视口再触发。
+        // 不能 unobserve——否则初始不可见的块将永远不被增强（用户反馈滚动后不渲染）
+        continue
+      }
       pendingEnhanceBlocks.delete(block)
       enhanceObserver?.unobserve(block)
-      if (entry.isIntersecting && settings) {
+      if (settings) {
         enhance(block)
       }
     }

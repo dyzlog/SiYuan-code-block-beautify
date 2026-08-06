@@ -1,7 +1,6 @@
 /**
  * 代码块美化插件 - 公共 DOM 能力检测
  */
-import { getLineStarts } from "./text-range"
 
 /** 代码块增强标记（dataset.cbEnhanced 的值） */export const ENHANCED_VALUE = "1"
 
@@ -59,7 +58,13 @@ export function caretLine(root: HTMLElement): number {
       acc += n.data.length
     }
   })
-  const starts = getLineStarts(text)
+  // 每行起始偏移（内联自 text-range 的 getLineStarts，避免 utils 循环依赖）
+  const starts: number[] = [0]
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "\n") {
+      starts.push(i + 1)
+    }
+  }
   let idx = 0
   for (let i = 0; i < starts.length; i++) {
     if (starts[i] <= abs) {

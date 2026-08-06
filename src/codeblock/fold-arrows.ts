@@ -18,6 +18,7 @@ import {
 import { getCodeBlockLanguage } from "./language"
 import { measureLineAt } from "./line-measure-service"
 import {
+  ensureEnhanced,
   registerDecor,
   registerRenderer,
 } from "./registry"
@@ -113,6 +114,12 @@ function clearFoldArrows(codeBlock: HTMLElement) {
 function refreshFoldArrows(codeBlock: HTMLElement) {
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
   if (!hljs) {
+    return
+  }
+  // 防御：若该块从未被完整增强（懒加载/IO 未触发），先触发完整增强——
+  // 否则 rerenderBlock 只渲染箭头层，产生「点击才出现残缺渲染」的问题。
+  // 经 registry 的 ensureEnhanced 触发（不再用全局 window 钩子）
+  if (!ensureEnhanced(codeBlock)) {
     return
   }
   renderFoldArrows(codeBlock, hljs, getCodeText(hljs), true)
