@@ -28,6 +28,8 @@ const ARROW_CLASS = "cb-fold-arrow"
 
 /** 每代码块的箭头层（防重复创建） */
 const arrowsLayer = new WeakMap<HTMLElement, HTMLElement>()
+/** 已安装 .hljs 内部滚动跟随的代码块（长代码收起后内部滚动时箭头跟随内容） */
+const scrollFollowInstalled = new WeakSet<HTMLElement>()
 
 /** 获取（或创建）折叠箭头层（overlay 内，absolute 覆盖） */
 function getArrowsLayer(codeBlock: HTMLElement): HTMLElement {
@@ -38,6 +40,15 @@ function getArrowsLayer(codeBlock: HTMLElement): HTMLElement {
     layer.setAttribute("contenteditable", "false")
     getOverlay(codeBlock).appendChild(layer)
     arrowsLayer.set(codeBlock, layer)
+    // 长代码收起后 .hljs 内部滚动：箭头层整体随内容上移（减 scrollTop）
+    // 否则箭头停在滚动前的位置，与代码行错位
+    const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
+    if (hljs && !scrollFollowInstalled.has(codeBlock)) {
+      scrollFollowInstalled.add(codeBlock)
+      hljs.addEventListener("scroll", () => {
+        layer.style.transform = `translateY(${-hljs.scrollTop}px)`
+      }, { passive: true })
+    }
   }
   return layer
 }

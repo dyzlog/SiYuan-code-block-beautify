@@ -141,6 +141,13 @@ function initCurrentLine(codeBlock: HTMLElement, hljs: HTMLElement, enabled: boo
     currentLine = -1
     clearHighlight(codeBlock)
   }, opts)
+  // 长代码收起后 .hljs 内部滚动：高亮行跟随内容（highlightLine 用实时 rect，
+  // getBoundingClientRect 已含 scrollTop，直接重算即可；无高亮时零开销）
+  hljs.addEventListener("scroll", () => {
+    if (currentLine >= 0) {
+      highlightLine(codeBlock, hljs, currentLine)
+    }
+  }, opts)
 }
 
 registerDecor({
