@@ -46,13 +46,9 @@ function applyFold(codeBlock: HTMLElement, folded: boolean, topNHeight: number) 
   if (folded && topNHeight > 0) {
     if (hljs) {
       hljs.style.maxHeight = `${topNHeight}px`
-      // 第一行居中：加 padding-top = 视口高/2，使首行内容落在可视区中间
-      // （padding 属于可滚动内容，滚动预览不受影响；展开时移除恢复原样）
-      hljs.style.paddingTop = `${Math.floor(topNHeight / 2)}px`
     }
   } else if (hljs) {
     hljs.style.maxHeight = ""
-    hljs.style.paddingTop = ""
   }
 }
 
@@ -63,6 +59,24 @@ function updateBtn(btn: HTMLButtonElement, folded: boolean) {
 /** 当前是否折叠（data 属性持久化） */
 function isFolded(codeBlock: HTMLElement): boolean {
   return codeBlock.dataset[FOLDED_ATTR] === "1"
+}
+
+/**
+ * 滚动文档使代码块顶部（第一行）落在滚动容器视口中间。
+ * 用于长代码收起后：直接看到折叠效果，无需手动下滑。
+ */
+function centerBlockInViewport(codeBlock: HTMLElement) {
+  const scroller = codeBlock.closest<HTMLElement>(".protyle-content")
+  if (!scroller) {
+    return
+  }
+  // 折叠后代码块高度已变，先读真实位置
+  const scrollerRect = scroller.getBoundingClientRect()
+  const blockRect = codeBlock.getBoundingClientRect()
+  // 让代码块顶部位于视口垂直中心：目标偏移 = 视口高/2
+  const targetOffset = scrollerRect.height / 2
+  const currentOffset = blockRect.top - scrollerRect.top
+  scroller.scrollTop += currentOffset - targetOffset
 }
 
 /** 解析折叠高度：同一阈值内用缓存（防抖动），阈值变化时用新高度并更新缓存 */
@@ -236,6 +250,10 @@ function renderLongCodeBar(
       }
       applyFold(codeBlock, folded, folded ? topNHeight : 0)
       updateBtn(btn!, folded)
+      // 收起后自动滚动：让代码块顶部（第一行）落在视口中间，直接看到折叠效果
+      if (folded) {
+        centerBlockInViewport(codeBlock)
+      }
     })
     getOverlay(codeBlock).appendChild(btn)
   }
