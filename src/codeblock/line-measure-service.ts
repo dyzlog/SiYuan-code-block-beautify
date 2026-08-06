@@ -1,5 +1,5 @@
+import { getCodeLines } from "../utils/dom"
 import { makeRange } from "../utils/text-range"
-import { getCodeLines } from "./folding"
 /**
  * 行测距服务：专供长代码折叠使用（行号显示已交给思源原生）。
  *

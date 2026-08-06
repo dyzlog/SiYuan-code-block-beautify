@@ -9,6 +9,11 @@ export function getCodeText(hljs: HTMLElement | null | undefined): string {
   return hljs?.textContent ?? ""
 }
 
+/** 获取 .hljs 内的行元素（行元素模式的判定依据，供测距/折叠共用） */
+export function getCodeLines(hljs: HTMLElement): HTMLElement[] {
+  return Array.from(hljs.querySelectorAll<HTMLElement>(".hljs-line"))
+}
+
 /** 遍历根节点下所有文本节点 */
 export function forEachTextNode(root: Node, cb: (text: Text) => void) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)

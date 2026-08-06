@@ -8,7 +8,10 @@
  *   进入编辑自动展开恢复，避免干扰思源的数据同步
  */
 import type { FoldRegion } from "./fold"
-import { getCodeText } from "../utils/dom"
+import {
+  getCodeLines,
+  getCodeText,
+} from "../utils/dom"
 import {
   countVisibleLines,
   getLineStarts,
@@ -45,11 +48,6 @@ export interface FoldState {
 }
 
 const foldStates = new WeakMap<HTMLElement, FoldState>()
-
-/** 获取 .hljs 内的行元素（行元素模式的判定依据） */
-export function getCodeLines(hljs: HTMLElement): HTMLElement[] {
-  return Array.from(hljs.querySelectorAll<HTMLElement>(".hljs-line"))
-}
 
 /** 获取代码块的折叠状态（未折叠过则返回 undefined） */
 export function getFoldState(codeBlock: HTMLElement): FoldState | undefined {
