@@ -3,8 +3,6 @@
  * registry 隔离回归测试：
  * 1. enhanceAll：单个模块抛错不中断其他模块（改 A 不挂 B/C/D）
  * 2. cleanupAll：单个模块清理异常不中断其他
- * 3. ensureEnhanced：完整增强入口的行为（已增强/未增强/未注入）
- * 4. registerRenderer / rerenderBlock：折叠箭头刷新注册
  */
 import {
   afterEach,
