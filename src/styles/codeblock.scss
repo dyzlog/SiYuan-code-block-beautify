@@ -14,7 +14,7 @@
   /* 创建 stacking context：让 z-index 为负的背景保持在背景之上、代码内容之下 */
   isolation: isolate;
 
-  /* 自定义背景图片：虚化后作为背景，不遮挡代码 */
+  /* 用户自定义背景图片：虚化后作为背景，不遮挡代码 */
   &::before {
     content: "";
     position: absolute;
@@ -36,6 +36,66 @@
     background-color: color-mix(in srgb, var(--b3-theme-background) var(--cb-bg-mask-opacity, 78%), transparent);
     pointer-events: none;
   }
+}
+
+/* ---------------- 边框样式 ---------------- */
+
+/* 像素游戏风：双层直角边框 + 阶梯阴影（经典 8-bit 感） */
+.code-block.cb-beautified.cb-border-pixel {
+  border: 3px solid var(--cb-border-color, var(--b3-border-color));
+  border-radius: 0;
+  overflow: visible;
+  box-shadow:
+    0 0 0 3px var(--b3-theme-background),
+    0 0 0 5px var(--cb-border-color, var(--b3-border-color));
+  padding: 4px;
+}
+
+/* 虚线边框 */
+.code-block.cb-beautified.cb-border-dashed {
+  border-style: dashed;
+}
+
+/* 毛玻璃：半透明背景 + 模糊 + 细亮边框 */
+.code-block.cb-beautified.cb-border-glass {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background-color: rgba(125, 125, 125, 0.08) !important;
+  box-shadow:
+    inset 0 0 24px rgba(255, 255, 255, 0.06),
+    0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* 手绘感：双层错位边框（border + outline 偏移模拟手绘不平整） */
+.code-block.cb-beautified.cb-border-handdrawn {
+  border: 2px solid var(--cb-border-color, var(--b3-border-color));
+  border-radius: 12px 8px 14px 9px;
+  outline: 2px solid transparent;
+  box-shadow:
+    0 0 0 1px var(--cb-border-color, var(--b3-border-color)),
+    0 0 0 3px var(--b3-theme-background);
+  transform: rotate(-0.15deg);
+}
+
+/* 巴洛克：金色双线 + 四角装饰（花纹角） */
+.code-block.cb-beautified.cb-border-baroque {
+  border: 2px solid var(--cb-border-color, var(--b3-theme-primary));
+  border-radius: var(--cb-radius, 8px);
+  outline: 1px solid var(--cb-border-color, var(--b3-theme-primary));
+  outline-offset: 3px;
+  box-shadow:
+    0 0 12px rgba(212, 160, 23, 0.25),
+    inset 0 0 8px rgba(212, 160, 23, 0.12);
+}
+
+/* 欧式：双线 + 大圆角 + 外描边 */
+.code-block.cb-beautified.cb-border-european {
+  border: 1px solid var(--cb-border-color, var(--b3-border-color));
+  border-radius: calc(var(--cb-radius, 8px) + 6px);
+  overflow: visible;
+  box-shadow:
+    0 0 0 3px var(--b3-theme-background),
+    0 0 0 4px var(--cb-border-color, var(--b3-border-color));
+  padding: 2px;
 }
 
 

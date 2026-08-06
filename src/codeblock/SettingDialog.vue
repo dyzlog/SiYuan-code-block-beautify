@@ -58,6 +58,35 @@
         </button>
       </div>
       <div class="cb-setting__item fn__flex">
+        <span class="cb-setting__label">边框样式</span>
+        <select
+          v-model="form.borderStyle"
+          class="b3-select fn__flex-center cb-setting__select"
+        >
+          <option value="solid">
+            实线
+          </option>
+          <option value="pixel">
+            像素游戏
+          </option>
+          <option value="dashed">
+            虚线
+          </option>
+          <option value="glass">
+            毛玻璃
+          </option>
+          <option value="handdrawn">
+            手绘感
+          </option>
+          <option value="baroque">
+            巴洛克
+          </option>
+          <option value="european">
+            欧式
+          </option>
+        </select>
+      </div>
+      <div class="cb-setting__item fn__flex">
         <span class="cb-setting__label">阴影大小</span>
         <input
           v-model.number="form.shadowSize"
