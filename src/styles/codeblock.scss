@@ -40,15 +40,22 @@
 
 /* ---------------- 边框样式 ---------------- */
 
-/* 像素游戏风：双层直角边框 + 阶梯阴影（经典 8-bit 感） */
+/* 像素游戏风：边框由「像素方块」组成（方块+间隙节奏，经典 8-bit 感）。
+   用四边 background 渐变绘制：每边 4px 方块 / 4px 间隙交替 */
 .code-block.cb-beautified.cb-border-pixel {
-  border: 3px solid var(--cb-border-color, var(--b3-border-color));
+  border: none;
   border-radius: 0;
   overflow: visible;
-  box-shadow:
-    0 0 0 3px var(--b3-theme-background),
-    0 0 0 5px var(--cb-border-color, var(--b3-border-color));
-  padding: 4px;
+  padding: 8px;
+  /* 四边像素块：top/bottom 横向方块，left/right 纵向方块 */
+  background-image:
+    repeating-linear-gradient(90deg, var(--cb-border-color, var(--b3-border-color)) 0 5px, transparent 5px 10px),
+    repeating-linear-gradient(90deg, var(--cb-border-color, var(--b3-border-color)) 0 5px, transparent 5px 10px),
+    repeating-linear-gradient(0deg, var(--cb-border-color, var(--b3-border-color)) 0 5px, transparent 5px 10px),
+    repeating-linear-gradient(0deg, var(--cb-border-color, var(--b3-border-color)) 0 5px, transparent 5px 10px);
+  background-size: 100% 5px, 100% 5px, 5px 100%, 5px 100%;
+  background-position: top, bottom, left, right;
+  background-repeat: no-repeat;
 }
 
 /* 虚线边框 */
@@ -56,15 +63,19 @@
   border-style: dashed;
 }
 
-/* 手绘感：双层错位边框（border + outline 偏移模拟手绘不平整） */
+/* 手绘感：宽度不均的边框（模拟手写笔压力不均——上下粗、两侧细且断续） */
 .code-block.cb-beautified.cb-border-handdrawn {
-  border: 2px solid var(--cb-border-color, var(--b3-border-color));
-  border-radius: 12px 8px 14px 9px;
-  outline: 2px solid transparent;
+  border: none;
+  border-radius: 10px 14px 8px 12px;
+  overflow: visible;
+  /* 四边不同宽度：顶部 3px、底部 2px、两侧 1px（笔画压力不均） */
   box-shadow:
-    0 0 0 1px var(--cb-border-color, var(--b3-border-color)),
-    0 0 0 3px var(--b3-theme-background);
-  transform: rotate(-0.15deg);
+    inset 0 3px 0 var(--cb-border-color, var(--b3-border-color)),
+    inset 0 -2px 0 var(--cb-border-color, var(--b3-border-color)),
+    inset 2px 0 0 var(--cb-border-color, var(--b3-border-color)),
+    inset -1px 0 0 var(--cb-border-color, var(--b3-border-color));
+  /* 轻微旋转增强手写感 */
+  transform: rotate(-0.2deg);
 }
 
 
