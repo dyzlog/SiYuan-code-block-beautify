@@ -34,14 +34,16 @@ function line(x1: number, y1: number, x2: number, y2: number, w = 1.5, opacity =
   return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${COLOR}" stroke-width="${w}" opacity="${opacity}"/>`
 }
 
-/** 环状刻度带（占星盘刻度：等分 count 份，长刻度每 majorStep 加长） */
-function tickRing(radius: number, count: number, majorStep: number, innerFrac: number, outerFrac: number, w = 1): string {
+/** 环状刻度带（占星盘刻度：每 6° 一根，长短交替——每 30° 长刻度加长） */
+function tickRing(radius: number, innerFrac: number, outerFrac: number): string {
   const parts: string[] = []
-  for (let i = 0; i < count; i++) {
-    const deg = (i * 360) / count
-    const [ix, iy] = pt(radius * innerFrac, deg)
-    const [ox, oy] = pt(radius * (i % majorStep === 0 ? outerFrac : outerFrac - 0.01), deg)
-    parts.push(line(ix, iy, ox, oy, w, 0.8))
+  // 每 6° 一根，共 60 根；每 30°（第 5 根）为长刻度
+  for (let i = 0; i < 360; i += 6) {
+    const isMain = i % 30 === 0
+    // 长刻度外延 outerFrac，短刻度外延 outerFrac-0.03（长短交替）
+    const [ix, iy] = pt(radius * innerFrac, i)
+    const [ox, oy] = pt(radius * (isMain ? outerFrac : outerFrac - 0.03), i)
+    parts.push(line(ix, iy, ox, oy, isMain ? 1.5 : 1, isMain ? 0.9 : 0.7))
   }
   return parts.join("\n    ")
 }
@@ -62,15 +64,19 @@ function sunRune(cx: number, cy: number, coreR: number, rayR: number, points = 1
   return parts.join("\n    ")
 }
 
-/** 凯尔特结符文（4 交叉椭圆弧组成的圆形结扣） */
+/** 凯尔特结符文（多层交叉椭圆交织，营造精妙符号感） */
 function knotRune(cx: number, cy: number, r: number): string {
   const parts: string[] = []
-  // 4 个交叉椭圆（旋转 0/45/90/135°）
-  for (let i = 0; i < 4; i++) {
-    const rot = i * 45
-    parts.push(`<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="${r.toFixed(1)}" ry="${(r * 0.55).toFixed(1)}" transform="rotate(${rot} ${cx.toFixed(1)} ${cy.toFixed(1)})" fill="none" stroke="${COLOR}" stroke-width="1.5"/>`)
+  // 外圈
+  parts.push(circle(cx, cy, r, 1.5))
+  // 6 个交叉椭圆（每 30° 旋转，形成密集交织结）
+  for (let i = 0; i < 6; i++) {
+    const rot = i * 30
+    parts.push(`<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="${(r * 0.85).toFixed(1)}" ry="${(r * 0.5).toFixed(1)}" transform="rotate(${rot} ${cx.toFixed(1)} ${cy.toFixed(1)})" fill="none" stroke="${COLOR}" stroke-width="1.2"/>`)
   }
-  parts.push(circle(cx, cy, r * 0.25, 1.5))
+  // 内圈 + 中心点
+  parts.push(circle(cx, cy, r * 0.35, 1.2, 0.8))
+  parts.push(circle(cx, cy, r * 0.12, 1, 0.9))
   return parts.join("\n    ")
 }
 
@@ -85,10 +91,10 @@ function magicCircle(scale: number, full: boolean): string {
   const parts: string[] = []
 
   if (full) {
-    // 1. 最外层刻度带（60 等分，每 30° 加长）
+    // 图层顺序：①外环刻度 → ②符文 → ③中层三角网 → ④大内环 → ⑤五芒星 → ⑥偏心圆轨道
+    // 1. 最外层刻度带（60 根，每 6°，长短交替）
     parts.push(circle(0, 0, r, 2.5, 0.9))
-    parts.push(tickRing(r, 60, 5, 0.944, 0.996, 1))
-    parts.push(tickRing(r, 60, 5, 0.944, 0.93, 1.5))
+    parts.push(tickRing(r, 0.96, 1.0))
 
     // 2. 四方位符文（正上太阳 + 3 凯尔特结，不对称——左上无）
     parts.push(sunRune(0, -0.82 * r, 0.06 * r, 0.12 * r))
@@ -97,20 +103,38 @@ function magicCircle(scale: number, full: boolean): string {
       parts.push(knotRune(kx, ky, 0.07 * r))
     }
 
-    // 3. 中层放射线（20 条，每 18°）
-    for (let i = 0; i < 20; i++) {
-      const deg = i * 18
-      const [ex, ey] = pt(0.85 * r, deg)
-      parts.push(line(0, 0, ex, ey, 1, 0.6))
+    // 3. 中层三角网格：五芒星外顶点(0.6R) → 中层环(0.72R) → 外环(0.85R)
+    //    连接相邻顶点中点形成三角/梯形网格（避免中心放射线拥挤）
+    //    放射线只画外环→中层段（0.6R 到 0.85R），中心不密集
+    for (let i = 0; i < 10; i++) {
+      const deg = i * 36
+      // 放射线：仅中层段（0.62R → 0.85R），中心区留空
+      const [ix, iy] = pt(0.62 * r, deg)
+      const [ox, oy] = pt(0.85 * r, deg)
+      parts.push(line(ix, iy, ox, oy, 1, 0.6))
     }
-
-    // 3b. 五角星外顶点骨架（连接外顶点到外环 + 相邻中点，形成三角网格）
+    // 中层环（0.72R）——网格的水平连接
+    parts.push(circle(0, 0, 0.72 * r, 1, 0.5))
+    // 五芒星外顶点(0.6R)与中层环(0.72R)之间的连接线（形成网格）
     for (let i = 0; i < 5; i++) {
-      const [vx, vy] = pt(0.6 * r, i * 72)
-      parts.push(line(0, 0, vx, vy, 1, 0.5))
+      const deg = i * 72
+      const [vx, vy] = pt(0.6 * r, deg)
+      const [mx, my] = pt(0.72 * r, deg + 36)
+      parts.push(line(vx, vy, mx, my, 1, 0.5))
+    }
+    // 外环与中层环之间的连接（10 等分点，形成梯形网格）
+    for (let i = 0; i < 10; i++) {
+      const deg = i * 36
+      const [mx, my] = pt(0.72 * r, deg)
+      const [ox, oy] = pt(0.85 * r, deg + 18)
+      parts.push(line(mx, my, ox, oy, 1, 0.45))
     }
 
-    // 4. 核心五芒星（外顶点 0.6R / 内凹 0.25R，偏移 36°）
+    // 4. 大内环（0.6R，与五芒星顶点相交）+ 60 刻度
+    parts.push(circle(0, 0, 0.6 * r, 2, 0.85))
+    parts.push(tickRing(0.6 * r, 0.96, 1.0))
+
+    // 5. 核心五芒星（后画，不被放射线割断）
     const star: string[] = []
     for (let i = 0; i < 5; i++) {
       const [ox, oy] = pt(0.6 * r, i * 72)
@@ -122,9 +146,6 @@ function magicCircle(scale: number, full: boolean): string {
 
     // 内圈1：包裹凹槽（0.28R）
     parts.push(circle(0, 0, 0.28 * r, 1.5, 0.8))
-    // 内圈2：大内环（0.6R，与外五芒星顶点相交）+ 60 刻度
-    parts.push(circle(0, 0, 0.6 * r, 2, 0.85))
-    parts.push(tickRing(0.6 * r, 60, 5, 0.96, 1.0, 1))
 
     // 5. 偏心圆（左下）
     parts.push(circle(-0.35 * r, 0.25 * r, 0.24 * r, 1.5, 0.85))
@@ -138,7 +159,7 @@ function magicCircle(scale: number, full: boolean): string {
   } else {
     // 小阵：外环 + 五芒星 + 刻度
     parts.push(circle(0, 0, r, 2, 0.85))
-    parts.push(tickRing(r, 24, 6, 0.93, 1.0, 1))
+    parts.push(tickRing(r, 0.93, 1.0))
     const star: string[] = []
     for (let i = 0; i < 5; i++) {
       const [ox, oy] = pt(0.6 * r, i * 72)
@@ -168,38 +189,42 @@ function tickRing2(cx: number, cy: number, radius: number, count: number, innerF
   return parts.join("\n    ")
 }
 
-/** 新月形刻度轨道：贝塞尔双弧闭合 + 轨道齿痕（15-20 条） */
+/** 新月形刻度轨道：双 Cubic Bezier 闭合弧带（右上看 → 左下偏心圆）+ 轨道齿痕 */
 function crescentTrack(r: number): string {
   const parts: string[] = []
-  // 外弧：从右上 (0.45R,-0.45R) 弯向偏心圆（-0.35R, 0.25R）
-  const startX = 0.45 * r
-  const startY = -0.45 * r
-  const endX = -0.35 * r
-  const endY = 0.25 * r
-  const ctrlX = 0.1 * r
-  const ctrlY = 0.4 * r
+  // 起点：右上 (0.45R, -0.45R)；终点：左下偏心圆附近 (-0.35R, 0.25R)
+  const sx = 0.45 * r
+  const sy = -0.45 * r
+  const ex = -0.35 * r
+  const ey = 0.25 * r
+  // 两个控制点：让曲线向右下方弯曲，末段弯向偏心圆
+  const c1x = 0.5 * r
+  const c1y = 0.1 * r
+  const c2x = -0.1 * r
+  const c2y = 0.35 * r
   // 外弧
-  parts.push(`<path d="M ${startX.toFixed(1)} ${startY.toFixed(1)} Q ${ctrlX.toFixed(1)} ${ctrlY.toFixed(1)} ${endX.toFixed(1)} ${endY.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.5"/>`)
-  // 内弧（平行偏移 0.06R）
+  parts.push(`<path d="M ${sx.toFixed(1)} ${sy.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.5"/>`)
+  // 内弧（偏移 0.06R，方向 = 外弧切线垂直方向）
   const off = 0.06 * r
-  const innerEndX = endX + off * 0.5
-  const innerEndY = endY - off * 0.5
-  const innerStartX = startX - off * 0.5
-  const innerStartY = startY - off * 0.5
-  parts.push(`<path d="M ${innerStartX.toFixed(1)} ${innerStartY.toFixed(1)} Q ${(ctrlX + off).toFixed(1)} ${(ctrlY - off * 0.5).toFixed(1)} ${innerEndX.toFixed(1)} ${innerEndY.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.2" opacity="0.8"/>`)
-  // 轨道齿痕（沿外弧 16 个等距点，垂直短线）
-  for (let i = 0; i < 16; i++) {
-    const t = i / 15
-    // 二次贝塞尔插值
-    const bx = (1 - t) * (1 - t) * startX + 2 * (1 - t) * t * ctrlX + t * t * endX
-    const by = (1 - t) * (1 - t) * startY + 2 * (1 - t) * t * ctrlY + t * t * endY
-    // 切线方向（导数）
-    const dx = 2 * (1 - t) * (ctrlX - startX) + 2 * t * (endX - ctrlX)
-    const dy = 2 * (1 - t) * (ctrlY - startY) + 2 * t * (endY - ctrlY)
+  const innerSx = sx - off * 0.5
+  const innerSy = sy + off * 0.5
+  const innerEx = ex + off * 0.5
+  const innerEy = ey - off * 0.5
+  parts.push(`<path d="M ${innerSx.toFixed(1)} ${innerSy.toFixed(1)} C ${(c1x - off * 0.4).toFixed(1)} ${(c1y + off * 0.4).toFixed(1)} ${(c2x + off * 0.4).toFixed(1)} ${(c2y - off * 0.4).toFixed(1)} ${innerEx.toFixed(1)} ${innerEy.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.2" opacity="0.8"/>`)
+  // 轨道齿痕：沿外弧 18 个等距点，垂直短线（细分刻度感）
+  for (let i = 0; i < 18; i++) {
+    const t = i / 17
+    // 三次贝塞尔插值
+    const mt = 1 - t
+    const bx = mt * mt * mt * sx + 3 * mt * mt * t * c1x + 3 * mt * t * t * c2x + t * t * t * ex
+    const by = mt * mt * mt * sy + 3 * mt * mt * t * c1y + 3 * mt * t * t * c2y + t * t * t * ey
+    // 切线
+    const dx = 3 * mt * mt * (c1x - sx) + 6 * mt * t * (c2x - c1x) + 3 * t * t * (ex - c2x)
+    const dy = 3 * mt * mt * (c1y - sy) + 6 * mt * t * (c2y - c1y) + 3 * t * t * (ey - c2y)
     const len = Math.hypot(dx, dy) || 1
     const nx = -dy / len
     const ny = dx / len
-    const h = 0.04 * r
+    const h = 0.035 * r
     parts.push(line(bx - nx * h, by - ny * h, bx + nx * h, by + ny * h, 1, 0.7))
   }
   return parts.join("\n    ")
