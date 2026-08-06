@@ -3,14 +3,15 @@ import { describe, expect, it } from "vitest"
 import {
   countVisibleLines,
   getLineStarts,
+  splitLineNodeGroups,
 } from "../src/utils/text-range"
 
 describe("getLineStarts", () => {
-  it("单行", () => {
+  it("单�1�7", () => {
     expect(getLineStarts("abc")).toEqual([0])
   })
 
-  it("多行（含末尾换行）", () => {
+  it("多�1�7（含朄1�7��换�1�7＄1�7", () => {
     expect(getLineStarts("a\nb\nc")).toEqual([0, 2, 4])
   })
 
@@ -20,15 +21,58 @@ describe("getLineStarts", () => {
 })
 
 describe("countVisibleLines", () => {
-  it("普通多行", () => {
+  it("晄1�7���1�7衄1�7", () => {
     expect(countVisibleLines("a\nb\nc")).toBe(3)
   })
 
-  it("忽略末尾换行造成的多余空行", () => {
+  it("忽略朄1�7��换�1�7造成的�1�7余空衄1�7", () => {
     expect(countVisibleLines("a\nb\n")).toBe(2)
   })
 
-  it("空文本按 1 行", () => {
+  it("空文朄1�7�� 1 衄1�7", () => {
     expect(countVisibleLines("")).toBe(1)
+  })
+})
+
+describe("splitLineNodeGroups", () => {
+  it("span + \\n �ı��ڵ�ṹ��ȷ����", () => {
+    const root = document.createElement("div")
+    const s1 = document.createElement("span")
+    s1.textContent = "if (a) {"
+    root.appendChild(s1)
+    root.appendChild(document.createTextNode("\n"))
+    const s2 = document.createElement("span")
+    s2.textContent = "  b()"
+    root.appendChild(s2)
+    root.appendChild(document.createTextNode("\n"))
+    const s3 = document.createElement("span")
+    s3.textContent = "}"
+    root.appendChild(s3)
+
+    const rows = splitLineNodeGroups(root)
+    // 3 �У�if / b() / }
+    expect(rows.length).toBe(3)
+    expect(rows[0].length).toBeGreaterThan(0)
+    expect(rows[1].length).toBeGreaterThan(0)
+    expect(rows[2].length).toBeGreaterThan(0)
+  })
+
+  it("ʡ����ռλ��Ϊһ��", () => {
+    const root = document.createElement("div")
+    const s1 = document.createElement("span")
+    s1.textContent = "if (a) {"
+    root.appendChild(s1)
+    root.appendChild(document.createTextNode("\n"))
+    const ellipsis = document.createElement("div")
+    ellipsis.className = "cb-fold-ellipsis"
+    root.appendChild(ellipsis)
+    root.appendChild(document.createTextNode("\n"))
+    const s2 = document.createElement("span")
+    s2.textContent = "}"
+    root.appendChild(s2)
+
+    const rows = splitLineNodeGroups(root)
+    // 3 �У�if / ʡ���� / }
+    expect(rows.length).toBe(3)
   })
 })

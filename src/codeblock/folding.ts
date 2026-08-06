@@ -12,13 +12,9 @@ import {
   getCodeLines,
   getCodeText,
 } from "../utils/dom"
-import {
-  getLineStarts,
-  makeRange,
-} from "../utils/text-range"
+import { splitLineNodeGroups } from "../utils/text-range"
 import { findFoldRegions } from "./fold"
 import { getCodeBlockLanguage } from "./language"
-import { fallbackLineHeight } from "./line-metrics"
 import { rerenderBlock } from "./registry"
 
 /** 折叠省略行类名（enhancer 兜底清理 / 折叠功能复用） */
@@ -51,7 +47,7 @@ export function getFoldState(codeBlock: HTMLElement): FoldState | undefined {
 }
 
 /** 折叠 / 展开某个区域（自动选择模式） */
-function toggleFold(codeBlock: HTMLElement, startLine: number) {
+export function toggleFold(codeBlock: HTMLElement, startLine: number) {
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
   if (!hljs) {
     return
@@ -154,7 +150,7 @@ function toggleFoldByText(codeBlock: HTMLElement, hljs: HTMLElement, startLine: 
 function foldTextArea(codeBlock: HTMLElement, hljs: HTMLElement, region: FoldRegion) {
   let state = foldStates.get(codeBlock)
   // 目标区域内若已有折叠区域（嵌套折叠），先展开它们再折叠外层，
-  // 否则外层 extractContents 会把内层省略行一并提取走，导致内容错乱
+  // 否则外层提取会把内层省略行一并提取走，导致内容错乱
   if (state && state.areas.length > 0) {
     const inner = state.areas.filter((a) => (
       a.start >= region.start
@@ -166,38 +162,32 @@ function foldTextArea(codeBlock: HTMLElement, hljs: HTMLElement, region: FoldReg
     }
     state = foldStates.get(codeBlock)
   }
-  // 方案A：region 来自当前文本解析，即当前 DOM 行号，无需原始↔当前换算
-  const text = getCodeText(hljs)
-  const starts = getLineStarts(text)
-  const startOff = starts[region.start + 1]
-  if (startOff === undefined) {
+  // 节点级折叠：按行节点组提取（不按文本偏移——折叠多次零累积误差）
+  // region 来自 findFoldRegions(getCodeText)（当前 DOM 文本），行号 = 当前行
+  const rows = splitLineNodeGroups(hljs)
+  if (region.start + 1 >= rows.length) {
     return
   }
-  const endOff = region.end + 1 < starts.length ? starts[region.end + 1] : text.length
-  if (startOff >= endOff) {
+  const endRowIdx = Math.min(region.end, rows.length - 1)
+  const nodes = rows.slice(region.start + 1, endRowIdx + 1).flat()
+  if (nodes.length === 0) {
     return
   }
-  const range = makeRange(hljs, startOff, endOff)
+  // 用节点边界构造 Range（setStartBefore/setEndAfter，非文本偏移）
+  const range = document.createRange()
+  range.setStartBefore(nodes[0])
+  range.setEndAfter(nodes[nodes.length - 1])
   const fragment = range.extractContents()
   const ellipsis = document.createElement("div")
   ellipsis.className = ELLIPSIS_CLASS
   ellipsis.setAttribute("contenteditable", "false")
   ellipsis.dataset.count = String(region.end - region.start)
-  const extractedLines = region.end - region.start
-  // 省略行 div 内放与折叠行数相等的换行文本：使「文本偏移 → DOM 行」
-  // 完全线性（文本行数 = DOM 行数），makeRange 定位准确，下方行号/箭头不错位。
-  // 安全：折叠态下 save-guard 在思源 data-editing 时自动展开，思源不会
-  // 在折叠态读取 outerHTML 序列化该占位文本
-  ellipsis.textContent = "\n".repeat(extractedLines + 1)
-  // DOM 高度 = 被折叠行数：省略行 div 自身高 1 行 + margin 补足其余行
-  if (extractedLines > 1) {
-    const lineHeight = fallbackLineHeight(hljs)
-    ellipsis.style.marginBottom = `${(extractedLines - 1) * lineHeight}px`
-  }
+  // 省略行零文本（不污染 textContent/outerHTML）——折叠后 DOM 行数真实减少，
+  // 后续重新切分时省略行视为一行（splitLineNodeGroups 已处理）
   ellipsis.addEventListener("click", (e) => {
     e.preventDefault()
     e.stopPropagation()
-    // 方案A：省略行即展开入口（DOM 即状态）——直接展开本区域，不依赖行号
+    // 省略行即展开入口（DOM 即状态）——直接展开本区域，不依赖行号
     const s = foldStates.get(codeBlock)
     if (!s) {
       return
