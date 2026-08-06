@@ -98,31 +98,31 @@
 
 /* 文本模式折叠：省略行（位于 .hljs 内）。
    文本用 CSS content 渲染，不进入 textContent，避免污染思源数据同步 */
-.cb-fold-ellipsis {
-  display: block;
-  height: var(--cb-line-height, 1.6em);
-  line-height: var(--cb-line-height, 1.6em);
+/* 视觉遮盖折叠（方案④）：覆盖代码块内折叠区域的不透明遮盖条。
+   零 DOM 改动——代码始终完整，折叠只是视觉遮盖，点遮盖条展开 */
+.cb-fold-cover {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  box-sizing: border-box;
   color: var(--b3-theme-on-surface);
   font-size: var(--cb-line-font-size, 14px);
   font-family: var(--cb-font-family, var(--b3-font-code, monospace));
   cursor: pointer;
   user-select: none;
-  opacity: 0.55;
-  /* 省略行 div 内含 \n 占位文本（保持文本行数 = DOM 行数）——
-     white-space: pre 使 \n 不参与视觉折行，overflow: hidden 防止占位文本撑高 */
-  white-space: pre;
-  overflow: hidden;
-  /* VS Code 风格：折叠区域高亮 */
-  background-color: rgba(125, 125, 125, 0.1);
-  border-radius: 2px;
-
-  &::before {
-    content: "⋯ 已折叠 " attr(data-count) " 行";
-  }
+  opacity: 0.6;
+  /* 不透明背景：完全盖住折叠区域的代码 */
+  background-color: var(--b3-theme-background-light);
+  border-top: 1px solid var(--b3-border-color);
+  border-bottom: 1px solid var(--b3-border-color);
+  transition: opacity 0.15s;
 
   &:hover {
     opacity: 0.9;
-    background-color: rgba(125, 125, 125, 0.16);
   }
 }
 

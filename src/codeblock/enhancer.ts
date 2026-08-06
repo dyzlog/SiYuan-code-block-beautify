@@ -35,6 +35,7 @@ import {
 import "./code-stats"
 import "./current-line"
 import "./fold-arrows"
+import "./fold-cover"
 import "./longcode"
 
 const CODE_BLOCK_SELECTOR = ".code-block"

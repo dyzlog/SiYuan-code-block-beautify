@@ -12,9 +12,9 @@ import { getCodeText } from "../utils/dom"
 import { getOverlay } from "../utils/overlay"
 import { findFoldRegions } from "./fold"
 import {
-  getFoldState,
-  makeFoldBtn,
-} from "./folding"
+  getFoldedStarts,
+  toggleFoldCover,
+} from "./fold-cover"
 import { getCodeBlockLanguage } from "./language"
 import { measureLineAt } from "./line-measure-service"
 import {
@@ -73,13 +73,8 @@ function renderFoldArrows(
   const hljsRect = hljs.getBoundingClientRect()
   const overlayRect = overlay.getBoundingClientRect()
   const baseY = hljsRect.top - overlayRect.top
-  const state = getFoldState(codeBlock)
-  const foldedStarts = new Set<number>()
-  if (state) {
-    for (const a of state.areas) {
-      foldedStarts.add(a.start)
-    }
-  }
+  // 已折叠区域（fold-cover 视觉遮盖）在行号列不渲染箭头，由遮盖条承载展开
+  const foldedStarts = getFoldedStarts(codeBlock)
   // 注册刷新回调（折叠/展开后 rerenderBlock 触发箭头方向更新）
   registerRenderer(codeBlock, () => refreshFoldArrows(codeBlock))
   // 定位：只精确测量前两个区域，推算等行高（思源代码块等高行），
@@ -92,12 +87,21 @@ function renderFoldArrows(
   }
   for (let i = 0; i < regions.length; i++) {
     const region = regions[i]
-    // 方案A：已折叠区域由省略行承载展开入口，行号列不再渲染箭头
+    // 已折叠区域由遮盖条承载展开入口，行号列不渲染箭头
     if (foldedStarts.has(region.start)) {
       continue
     }
-    const btn = makeFoldBtn(codeBlock, region.start, false)
-    btn.className = `${btn.className} ${ARROW_CLASS}`
+    // 创建折叠箭头按钮（点击切换视觉遮盖）
+    const btn = document.createElement("button")
+    btn.type = "button"
+    btn.className = `${ARROW_CLASS} cb-fold-btn`
+    btn.title = "折叠代码块"
+    btn.addEventListener("click", (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      toggleFoldCover(codeBlock, region.start)
+      refreshFoldArrows(codeBlock)
+    })
     const top = i === 0
       ? firstTop
       : stride > 0
