@@ -34,16 +34,16 @@ function line(x1: number, y1: number, x2: number, y2: number, w = 1.5, opacity =
   return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${COLOR}" stroke-width="${w}" opacity="${opacity}"/>`
 }
 
-/** 环状刻度带（占星盘刻度：每 6° 一根，长短交替——每 30° 长刻度加长） */
+/** 环状刻度带（占星盘刻度：每 6° 短细线，每 30° 长粗线——严谨长短交替） */
 function tickRing(radius: number, innerFrac: number, outerFrac: number): string {
   const parts: string[] = []
-  // 每 6° 一根，共 60 根；每 30°（第 5 根）为长刻度
+  // 每 6° 一根，共 60 根；每 30° 换成长粗刻度
   for (let i = 0; i < 360; i += 6) {
     const isMain = i % 30 === 0
-    // 长刻度外延 outerFrac，短刻度外延 outerFrac-0.03（长短交替）
+    // 长刻度：从 innerFrac 延伸到 outerFrac（全长），粗 2px；短刻度：只到 outerFrac-0.04，细 1px
     const [ix, iy] = pt(radius * innerFrac, i)
-    const [ox, oy] = pt(radius * (isMain ? outerFrac : outerFrac - 0.03), i)
-    parts.push(line(ix, iy, ox, oy, isMain ? 1.5 : 1, isMain ? 0.9 : 0.7))
+    const [ox, oy] = pt(radius * (isMain ? outerFrac : outerFrac - 0.04), i)
+    parts.push(line(ix, iy, ox, oy, isMain ? 2 : 1, isMain ? 0.9 : 0.6))
   }
   return parts.join("\n    ")
 }
@@ -92,7 +92,7 @@ function magicCircle(scale: number, full: boolean): string {
   if (full) {
     // 图层顺序：①外环刻度 → ②符文 → ③中层三角网 → ④大内环 → ⑤五芒星 → ⑥偏心圆轨道
     // 1. 最外层刻度带（60 根，每 6°，长短交替）
-    parts.push(circle(0, 0, r, 2.5, 0.9))
+    parts.push(circle(0, 0, r, 3.5, 0.9))
     parts.push(tickRing(r, 0.96, 1.0))
 
     // 2. 四方位符文（正上太阳 + 3 凯尔特结，不对称——左上无）
@@ -146,7 +146,7 @@ function magicCircle(scale: number, full: boolean): string {
     }
 
     // 4. 大内环（0.6R，与五芒星顶点相交）+ 内圈刻度带（加长 0.90→1.0 明显可见）
-    parts.push(circle(0, 0, 0.6 * r, 2, 0.85))
+    parts.push(circle(0, 0, 0.6 * r, 2.5, 0.85))
     parts.push(tickRing(0.6 * r, 0.90, 1.0))
 
     // 5. 核心五芒星（后画，不被放射线割断）
@@ -157,10 +157,10 @@ function magicCircle(scale: number, full: boolean): string {
       star.push(`${ox.toFixed(1)},${oy.toFixed(1)}`)
       star.push(`${ix.toFixed(1)},${iy.toFixed(1)}`)
     }
-    parts.push(`<polygon points="${star.join(" ")}" fill="none" stroke="${COLOR}" stroke-width="2.5"/>`)
+    parts.push(`<polygon points="${star.join(" ")}" fill="none" stroke="${COLOR}" stroke-width="3.5"/>`)
 
     // 内圈1：包裹凹槽（0.28R）+ 更细同心圆（0.22R）+ 十字基准线（罗盘感）
-    parts.push(circle(0, 0, 0.28 * r, 1.5, 0.8))
+    parts.push(circle(0, 0, 0.28 * r, 2, 0.8))
     parts.push(circle(0, 0, 0.22 * r, 0.8, 0.5))
     parts.push(circle(0, 0, 0.16 * r, 0.8, 0.45))
     // 十字交叉基准线（罗盘基准）
@@ -225,28 +225,30 @@ function tickRing2(cx: number, cy: number, radius: number, count: number, innerF
 }
 
 /**
- * 新月形刻度轨道：单条三次贝塞尔 C 曲线（平滑无折角，限制在环带内）。
- * 起点锁在右侧内环边缘 (0.6R,0)，控制点向右下弯，终到偏心圆上方 (-0.35R,0.05R)。
+ * 新月形刻度轨道：单条三次贝塞尔 C 曲线（平滑弧带）。
+ * 起点锁在右侧内环边缘 (0.6R,0)，终点精确锁定左下偏心圆顶部外边缘。
+ * 偏心圆中心 (-0.35R,0.25R) 半径 0.24R → 顶部外边缘 = (-0.35R, 0.01R)。
  */
 function crescentTrack(r: number): string {
   const parts: string[] = []
   const sx = 0.6 * r
   const sy = 0
+  // 偏心圆顶部外边缘（精确锁定）
   const ex = -0.35 * r
-  const ey = 0.05 * r
-  // 三次贝塞尔控制点：C1 向右下推（形成大弧），C2 向左下弯向偏心圆
-  const c1x = 0.55 * r
-  const c1y = 0.5 * r
-  const c2x = 0.0 * r
-  const c2y = 0.35 * r
+  const ey = 0.25 * r - 0.24 * r
+  // 三次贝塞尔控制点：C1 向右下推，C2 在中间偏右下（避免平直段，曲线更圆润）
+  const c1x = 0.6 * r
+  const c1y = 0.42 * r
+  const c2x = 0.1 * r
+  const c2y = 0.42 * r
   // 外弧：单条 C 曲线（连续平滑）
-  parts.push(`<path d="M ${sx.toFixed(1)} ${sy.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.5"/>`)
-  // 内弧（偏移 0.06R，垂直方向偏移）
+  parts.push(`<path d="M ${sx.toFixed(1)} ${sy.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.5" stroke-linecap="round"/>`)
+  // 内弧（向曲线内侧偏移 0.06R）
   const off = 0.06 * r
-  parts.push(`<path d="M ${(sx - off * 0.5).toFixed(1)} ${(sy + off * 0.5).toFixed(1)} C ${(c1x - off * 0.5).toFixed(1)} ${(c1y - off * 0.5).toFixed(1)} ${(c2x + off * 0.5).toFixed(1)} ${(c2y - off * 0.5).toFixed(1)} ${(ex + off * 0.5).toFixed(1)} ${(ey + off * 0.5).toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.2" opacity="0.8"/>`)
-  // 轨道齿痕：沿三次贝塞尔真实采样（切线法线，20 个等距）
-  for (let i = 0; i <= 19; i++) {
-    const t = i / 19
+  parts.push(`<path d="M ${(sx - off * 0.5).toFixed(1)} ${(sy + off * 0.5).toFixed(1)} C ${(c1x - off * 0.6).toFixed(1)} ${(c1y - off * 0.4).toFixed(1)} ${(c2x + off * 0.6).toFixed(1)} ${(c2y - off * 0.4).toFixed(1)} ${(ex + off * 0.5).toFixed(1)} ${(ey + off * 0.5).toFixed(1)}" fill="none" stroke="${COLOR}" stroke-width="1.2" opacity="0.8" stroke-linecap="round"/>`)
+  // 轨道齿痕：沿三次贝塞尔真实采样（切线法线，细短线，不产生阶梯感）
+  for (let i = 0; i <= 23; i++) {
+    const t = i / 23
     const mt = 1 - t
     const bx = mt * mt * mt * sx + 3 * mt * mt * t * c1x + 3 * mt * t * t * c2x + t * t * t * ex
     const by = mt * mt * mt * sy + 3 * mt * mt * t * c1y + 3 * mt * t * t * c2y + t * t * t * ey
@@ -255,8 +257,8 @@ function crescentTrack(r: number): string {
     const len = Math.hypot(dx, dy) || 1
     const nx = -dy / len
     const ny = dx / len
-    const hl = 0.035 * r
-    parts.push(line(bx - nx * hl, by - ny * hl, bx + nx * hl, by + ny * hl, 1, 0.7))
+    const hl = 0.03 * r
+    parts.push(line(bx - nx * hl, by - ny * hl, bx + nx * hl, by + ny * hl, 1, 0.6))
   }
   return parts.join("\n    ")
 }
