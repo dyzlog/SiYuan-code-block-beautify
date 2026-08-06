@@ -286,26 +286,16 @@ function ensureEnhanceObserver() {
   }, { rootMargin: "200px" })
 }
 
-/** 处理单个代码块：已增强则校验；未增强且不在视口 → 进入视口再增强 */
+/** 处理单个代码块：已增强则轻量校验；未增强一律交给共享 IO（进入视口才增强） */
 function processBlock(block: HTMLElement) {
   if (block.dataset.cbEnhanced === ENHANCED_VALUE) {
     verify(block)
     return
   }
-  // 视口门控：不可见代码块延迟到进入视口再增强（长文档初始化不全量增强）
-  if (isElementVisible(block)) {
-    enhance(block)
-  } else {
-    observeForEnhance(block)
-  }
-}
-
-/** 元素是否可见（祖先链无 display:none 等，非当前文档的 protyle 不可见） */
-function isElementVisible(el: HTMLElement): boolean {
-  if (typeof el.checkVisibility === "function") {
-    return el.checkVisibility()
-  }
-  return el.offsetParent !== null || el.getClientRects().length > 0
+  // 不在这里做任何可见性判断/布局读取——统一交给 IntersectionObserver：
+  // 浏览器内部判断可见性（rootMargin 200px），进入视口才触发 enhance。
+  // 打开文档时视口外的块零测量、零布局读取（用户要求：只渲染看到 + 临近的少量块）
+  observeForEnhance(block)
 }
 
 /** 监听代码块进入视口后增强（共享观察器；触发即移除该块） */
@@ -325,18 +315,19 @@ function clearPendingEnhanceObservers() {
   pendingEnhanceBlocks.clear()
 }
 
-/** 校验已增强的代码块：若思源重渲染导致注入元素丢失，则补齐（注册表幂等） */
+/**
+ * 轻量校验已增强的代码块：仅检查 overlay 是否仍在，缺失才重新增强。
+ * 不再全量 enhanceAll——那会对视口外的块重复测量（布局读取），是卡顿热点。
+ */
 function verify(codeBlock: HTMLElement) {
   if (!settings) {
     return
   }
-  const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
-  // 装饰补齐（注册表幂等）：背景/纹理/当前行高亮/统计角标/长代码条/折叠箭头
-  enhanceAll({
-    codeBlock,
-    hljs,
-    settings,
-  })
+  // 检查 overlay 兄弟节点是否还在（思源重渲染若移除了它，需重新增强）
+  const ov = codeBlock.nextElementSibling
+  if (!ov || !ov.classList.contains("cb-overlay")) {
+    enhance(codeBlock)
+  }
 }
 
 function enhance(codeBlock: HTMLElement) {

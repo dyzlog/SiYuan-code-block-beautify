@@ -29,10 +29,24 @@ if (!Range.prototype.getBoundingClientRect) {
   })) as typeof Range.prototype.getBoundingClientRect
 }
 if (!("IntersectionObserver" in window)) {
+  // stub：observe 时立即触发回调（模拟进入视口）。
+  // 真实浏览器 IO 异步触发；jsdom 无真实布局，同步触发保证测试确定
   window.IntersectionObserver = class {
-    observe() {}
+    private cb: IntersectionObserverCallback
+    constructor(cb: IntersectionObserverCallback) {
+      this.cb = cb
+    }
+    observe(target: Element) {
+      this.cb([{ target, isIntersecting: true } as unknown as IntersectionObserverEntry], this as unknown as IntersectionObserver)
+    }
     disconnect() {}
     unobserve() {}
+    takeRecords() {
+      return []
+    }
+    root = null
+    rootMargin = ""
+    thresholds = []
   } as unknown as typeof IntersectionObserver
 }
 if (!("ResizeObserver" in window)) {

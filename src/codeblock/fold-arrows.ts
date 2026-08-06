@@ -74,13 +74,27 @@ function renderFoldArrows(
   }
   // 注册刷新回调（折叠/展开后 rerenderBlock 触发箭头方向更新）
   registerRenderer(codeBlock, () => refreshFoldArrows(codeBlock))
-  for (const region of regions) {
+  // 定位：只精确测量前两个区域，推算等行高（思源代码块等高行），
+  // 其余区域用等差推算——避免每区域一次 Range 测量（reflow），N 次 → 2 次
+  const regionsTop = regions.length
+  let firstTop = 0
+  let stride = 0
+  if (regionsTop > 0) {
+    firstTop = measureLineAt(hljs, text, regions[0].start).top
+    if (regionsTop > 1 && regions[1].start > regions[0].start) {
+      const secondTop = measureLineAt(hljs, text, regions[1].start).top
+      stride = (secondTop - firstTop) / (regions[1].start - regions[0].start)
+    }
+  }
+  for (let i = 0; i < regions.length; i++) {
+    const region = regions[i]
     const btn = makeFoldBtn(codeBlock, region.start, foldedStarts.has(region.start))
     btn.className = `${btn.className} ${ARROW_CLASS}`
-    // 精确测量第 start 行真实 top（相对 .hljs）+ hljs 相对 overlay 的偏移，
-    // 替代 region.start × lineHeight 估算（codeBlock 顶部与 .hljs 顶部之间
-    // 有 padding/装饰栏时乘法会整体偏上，用户反馈「偏上两行」）
-    const { top } = measureLineAt(hljs, text, region.start)
+    const top = i === 0
+      ? firstTop
+      : stride > 0
+        ? firstTop + (region.start - regions[0].start) * stride
+        : measureLineAt(hljs, text, region.start).top
     btn.style.top = `${baseY + top}px`
     layer.appendChild(btn)
   }
