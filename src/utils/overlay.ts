@@ -134,14 +134,16 @@ function applyGeom(_codeBlock: HTMLElement, ov: HTMLElement, g: OverlayGeom) {
   setStyle(ov, "clipPath", clip)
 }
 
-/** 帧内已同步的块（避免同一次增强中多次 getOverlay → 重复读几何/回流） */
-const syncedThisFrame = new WeakSet<HTMLElement>()
+/** 当前帧已同步的块集合（下一帧整体替换新实例，实现自动清空） */
+let syncedThisFrame = new WeakSet<HTMLElement>()
 let syncFrameScheduled = false
 
 /**
  * 同步单个 overlay（创建/尺寸变化时用，自读自写）。
  * 性能：同一帧内多次调用（如一次增强中 4 个模块各调 getOverlay）只读一次几何，
  * 合并为一次回流——增强不再因重复 getBoundingClientRect 卡顿。
+ * 帧末整体替换 WeakSet 实例（旧实例 GC 回收），下一帧重新允许同步，
+ * 保证滚动/布局变化时 overlay 位置持续跟随，不会残留。
  */
 function syncOverlay(codeBlock: HTMLElement, ov: HTMLElement) {
   // 帧内去重：同帧已同步过该块则跳过（几何未变，重复读纯属浪费）
@@ -151,9 +153,10 @@ function syncOverlay(codeBlock: HTMLElement, ov: HTMLElement) {
   syncedThisFrame.add(codeBlock)
   if (!syncFrameScheduled) {
     syncFrameScheduled = true
-    // 帧末清空标记，下一帧允许重新同步（块可能已移动）
+    // 帧末替换 WeakSet 实例 = 清空去重标记（旧实例被 GC），下一帧恢复同步
     requestAnimationFrame(() => {
       syncFrameScheduled = false
+      syncedThisFrame = new WeakSet<HTMLElement>()
     })
   }
   applyGeom(codeBlock, ov, readGeom(codeBlock, ov))
@@ -176,12 +179,13 @@ function cacheBlockOffset(codeBlock: HTMLElement) {
 function onScroll() {
   const margin = 1000
   const jobs: Array<[HTMLElement, HTMLElement, OverlayGeom]> = []
+  const farAway: Array<[HTMLElement, HTMLElement]> = []
   const first = [...activeBlocks][0]
   const scroller = first ? scrollerMap.get(first) : null
   const scrollTop = scroller?.scrollTop ?? 0
   const viewH = window.innerHeight
   // 阶段 1a：廉价预筛（读缓存 offsetTop + scrollTop，均不触发回流）
-  const candidates: HTMLElement[] = []
+  // 近块 → 后续读几何定位；远块（>margin）→ 直接标记隐藏，避免残留
   for (const cb of activeBlocks) {
     const ov = overlayMap.get(cb)
     if (!cb.isConnected || !ov?.isConnected) {
@@ -190,20 +194,19 @@ function onScroll() {
     const docTop = cachedOffsetTop.get(cb) ?? cb.offsetTop
     const approxTop = docTop - scrollTop
     if (approxTop > -margin && approxTop < viewH + margin) {
-      candidates.push(cb)
+      jobs.push([cb, ov, readGeom(cb, ov)])
+    } else {
+      farAway.push([cb, ov])
     }
   }
-  // 阶段 1b：仅对候选块读几何（一次回流）
-  for (const cb of candidates) {
-    const ov = overlayMap.get(cb)
-    if (!ov) {
-      continue
-    }
-    jobs.push([cb, ov, readGeom(cb, ov)])
-  }
-  // 阶段 2：批量写
+  // 阶段 2：批量写（近块定位 + 远块隐藏）
   for (const [cb, ov, g] of jobs) {
     applyGeom(cb, ov, g)
+  }
+  for (const [, ov] of farAway) {
+    // 滚出远超视口的块：隐藏 overlay（applyGeom 的可见性判断只在候选内执行，
+    // 远块不进候选就会残留在上次位置——这里强制隐藏）
+    setStyle(ov, "visibility", "hidden")
   }
 }
 
