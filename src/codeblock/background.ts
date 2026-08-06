@@ -140,6 +140,17 @@ export const TEXTURE_CLASSES = [
 /** SVG 背景主题（用 buildSakuraBg 生成 data URI 作 background-image） */
 const SVG_BG_THEMES = new Set(["sakura"])
 
+/** sakura SVG data URI 单例缓存（全文档只生成一次，后续块复用同一 URI，浏览器缓存命中） */
+let cachedSakuraUri: string | null = null
+
+/** 获取 sakura 背景 URI（惰性生成 + 缓存） */
+function getSakuraUri(): string {
+  if (!cachedSakuraUri) {
+    cachedSakuraUri = buildSakuraBg()
+  }
+  return cachedSakuraUri
+}
+
 /** 背景纹理主题 class 前缀 */
 const BG_CLASS_PREFIX = "cb-bg-"
 
@@ -190,8 +201,8 @@ function applyBackgroundTexture(codeBlock: HTMLElement, theme: string) {
     codeBlock.style.backgroundPosition = ""
   }
   if (SVG_BG_THEMES.has(theme)) {
-    // SVG 背景主题：生成 data URI 内联（静态发光魔法阵，不旋转）
-    codeBlock.style.backgroundImage = `url("${buildSakuraBg()}")`
+    // SVG 背景主题：复用单例 data URI（全文档只生成一次，浏览器缓存命中）
+    codeBlock.style.backgroundImage = `url("${getSakuraUri()}")`
     codeBlock.style.backgroundSize = "cover"
     codeBlock.style.backgroundPosition = "center"
     codeBlock.dataset.cbBgTheme = theme
