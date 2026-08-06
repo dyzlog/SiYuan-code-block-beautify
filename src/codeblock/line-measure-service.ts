@@ -3,6 +3,7 @@ import {
   getLineStarts,
   makeRange,
 } from "../utils/text-range"
+import { fallbackLineHeight } from "./line-metrics"
 /**
  * 行测距服务：专供长代码折叠使用（行号显示已交给思源原生）。
  *
@@ -13,7 +14,6 @@ import {
  * - 行元素模式（.hljs-line）：直接用元素 offsetTop
  * - 文本模式：用 Range 测量目标行首字符的顶部（只测 1 个目标行）
  */
-import { fallbackLineHeight } from "./line-metrics"
 
 interface LineMeasureResult {
   /** 第 lineNo 行的顶部坐标（相对 .hljs 顶部，px）；失败返回 0 */

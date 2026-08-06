@@ -22,7 +22,6 @@ import {
 import SettingDialog from "@/codeblock/SettingDialog.vue"
 import {
   applySettingsVars,
-
   DEFAULT_SETTINGS,
   mergeSettings,
   STORAGE_NAME,

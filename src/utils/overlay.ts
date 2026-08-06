@@ -89,7 +89,6 @@ function readGeom(codeBlock: HTMLElement): OverlayGeom {
   }
 }
 
-/** 应用位置 + 可视裁剪（写阶段，不读布局） */
 /** 写入去重辅助：值相同则跳过（避免无意义 DOM 写触发重绘） */
 function setStyle(el: HTMLElement, prop: "left" | "top" | "width" | "height" | "clipPath" | "visibility", value: string) {
   if (el.style[prop] !== value) {

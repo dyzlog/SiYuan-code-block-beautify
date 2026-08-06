@@ -480,7 +480,6 @@ import {
   fetchFileBlob,
   listBackgroundImages,
   uploadBackgroundImage,
-
 } from "./background"
 import { HIGHLIGHT_THEMES } from "./highlight-theme"
 import {

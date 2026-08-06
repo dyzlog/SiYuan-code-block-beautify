@@ -108,6 +108,9 @@ function renderFoldArrows(
 function clearFoldArrows(codeBlock: HTMLElement) {
   arrowsLayer.get(codeBlock)?.remove()
   arrowsLayer.delete(codeBlock)
+  // 一并释放滚动跟随标记，重扫/设置变更后重建层时重新绑定
+  // （否则新层不随长代码内部滚动，旧监听成为无效闭包）
+  scrollFollowInstalled.delete(codeBlock)
 }
 
 /**

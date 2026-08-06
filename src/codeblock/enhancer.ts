@@ -193,10 +193,6 @@ export function destroyCodeBlockEnhancer() {
   destroyOverlaySystem()
   // 清空完整增强入口（fold-arrows 防御调用将失效，符合卸载语义）
   setEnhanceBlock(() => {})
-
-
-
-
   plugin = null
   settings = null
 }
