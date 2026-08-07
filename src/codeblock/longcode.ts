@@ -200,20 +200,22 @@ function ensureThemeBar(codeBlock: HTMLElement): HTMLElement {
     getOverlay(codeBlock).appendChild(bar)
   }
   // 兼容思源原生语言标记位置：默认主题把 .protyle-action（语言/复制/更多）
-  // 放在代码块左上角，会与我们的主题栏重叠。测量其实际位置：
-  // 若在左侧（默认主题），bar 的 left 让位到语言标记右侧。
+  // 放在代码块左上角，会与我们的主题栏装饰（圆点/符号，left:12px）重叠。
+  // 检测到语言标记在左侧时，用 CSS 变量把装饰右移到语言标记右侧。
+  // 注意：只调装饰偏移，不移动 bar 本身（避免影响 bar 宽度/边框布局）。
   const action = codeBlock.querySelector<HTMLElement>(".protyle-action")
-  let leftInset = "0"
-  if (action && action.offsetParent) {
+  if (action) {
     const blockRect = codeBlock.getBoundingClientRect()
     const actionRect = action.getBoundingClientRect()
     // 语言标记在代码块左半部分且垂直重叠顶部区域 → 默认主题布局
-    if (actionRect.left - blockRect.left < blockRect.width / 2 && actionRect.top < blockRect.top + 30) {
-      // 语言标记右侧 + 小间距作为 bar 起点（圆点/符号从该处开始）
-      leftInset = `${Math.max(0, actionRect.right - blockRect.left) + 8}px`
+    if (blockRect.width > 0 && actionRect.left - blockRect.left < blockRect.width / 2
+      && actionRect.top < blockRect.top + 30) {
+      const offset = Math.max(12, actionRect.right - blockRect.left + 8)
+      bar.style.setProperty("--cb-bar-decor-left", `${offset}px`)
+    } else {
+      bar.style.removeProperty("--cb-bar-decor-left")
     }
   }
-  bar.style.left = leftInset
   ensureScrollFade(codeBlock)
   return bar
 }
