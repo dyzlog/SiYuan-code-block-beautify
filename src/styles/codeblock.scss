@@ -10,8 +10,9 @@
   border: var(--cb-border-width, 1px) solid var(--cb-border-color, var(--b3-border-color));
   /* 用户自定义背景色（空值时无效，回退主题默认） */
   background-color: var(--cb-bg-color) !important;
-  overflow: hidden;
-  /* 创建 stacking context：让 z-index 为负的背景保持在背景之上、代码内容之下 */
+  /* 创建 stacking context：让 z-index 为负的背景保持在背景之上、代码内容之下。
+     注意：不加 overflow: hidden——它会干扰思源对代码块内文本拖选（selection 矩形
+     计算异常导致「选中整个代码块」）。圆角裁剪由 ::before 背景层承担。 */
   isolation: isolate;
 
   /* 用户自定义背景图片：虚化后作为背景，不遮挡代码 */
