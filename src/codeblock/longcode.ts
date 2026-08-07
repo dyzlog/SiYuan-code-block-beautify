@@ -269,7 +269,13 @@ function renderLongCodeBar(
   // 恢复折叠状态（data 属性持久化），高度：同阈值用缓存，阈值变化自动调整
   const height = resolveFoldHeight(codeBlock, threshold, topNHeight)
   applyFold(codeBlock, wasFolded, wasFolded ? height : 0)
-  renderThemeDecor(bar, themeStyle)
+  if (isDefaultTheme()) {
+    // 默认主题：隐藏装饰栏（与原生语言标记左上角重叠），仅保留收起/展开按钮
+    bar.style.display = "none"
+  } else {
+    bar.style.display = ""
+    renderThemeDecor(bar, themeStyle)
+  }
   updateBtn(btn, wasFolded)
 }
 
@@ -285,8 +291,35 @@ function clearLongCodeBar(codeBlock: HTMLElement) {
 }
 
 /**
+ * 默认主题检测：思源内置主题（daylight/midnight）会把原生工具栏放代码块
+ * 左上角，与主题装饰栏重叠。默认主题下隐藏装饰栏（圆点/符号），
+ * 自定义主题（如 Asri）正常显示。
+ */
+function isDefaultTheme(): boolean {
+  const w = window as unknown as {
+    siyuan?: {
+      config?: {
+        appearance?: {
+          mode?: number
+          themeLight?: string
+          themeDark?: string
+        }
+      }
+    }
+  }
+  const cfg = w.siyuan?.config?.appearance
+  if (!cfg) {
+    return false
+  }
+  return (cfg.mode === 1 && cfg.themeDark === "midnight")
+    || (cfg.mode === 0 && cfg.themeLight === "daylight")
+}
+
+/**
  * 长代码条整体调度（代码块增强时调用一次，内部策略自管）：
  * - 主题栏开关关闭 → 完整清理
+ * - 默认主题（daylight/midnight）→ 隐藏装饰栏（原生工具栏左上角会重叠），
+ *   但长代码折叠按钮仍保留（走 renderLongCodeBtnOnly）
  * - 长代码 + 折叠开启 → 收起按钮 + 折叠态
  * - 否则仅顶部主题装饰栏（短代码也显示装饰，无收起按钮）
  */
@@ -299,6 +332,32 @@ function renderLongCodeSection(
   const showTheme = settings.themeStyleEnabled && settings.themeStyle
   if (!showTheme) {
     clearLongCodeBar(codeBlock)
+    return
+  }
+  const defaultTheme = isDefaultTheme()
+  if (defaultTheme) {
+    // 默认主题：装饰栏隐藏（renderLongCodeBar 内部处理），
+    // 仅保留长代码收起/展开按钮（功能不受影响）
+    if (!settings.longCodeFold) {
+      clearLongCodeBar(codeBlock)
+      return
+    }
+    const lineCount = countVisibleLines(text)
+    const n = settings.longCodeThreshold
+    if (lineCount <= n) {
+      clearLongCodeBar(codeBlock)
+      return
+    }
+    const {
+      top,
+      height,
+    } = measureLineAt(hljs, text, Math.min(n, lineCount) - 1)
+    const hljsStyle = getComputedStyle(hljs)
+    const padBottom = Number.parseFloat(hljsStyle.paddingBottom) || 0
+    const borderV = (Number.parseFloat(hljsStyle.borderTopWidth) || 0)
+      + (Number.parseFloat(hljsStyle.borderBottomWidth) || 0)
+    const topNHeight = top > 0 ? top + height + padBottom + borderV : 0
+    renderLongCodeBar(codeBlock, lineCount, n, topNHeight, settings.themeStyle)
     return
   }
   if (!settings.longCodeFold) {
