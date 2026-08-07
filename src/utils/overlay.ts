@@ -291,6 +291,10 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
     ov.style.left = "0"
     ov.style.top = "0"
     ov.style.pointerEvents = "none"
+    // 阻止 overlay 内容参与文本选择：思源拖选时若 selection 边界触及 overlay，
+    // 会判定 selection 无效并回退为「块级选中」（整个代码块高亮）。
+    // user-select: none 让 overlay 及其子元素完全不可选，不干扰原生 selection。
+    ov.style.userSelect = "none"
     // 裁剪内部装饰到 overlay 盒：高亮在长代码内部滚动时
     // 用 transform 上移，可能超出 overlay 顶部穿透到上方代码块——overflow
     // hidden 把移出的部分裁掉，杜绝「下方块内容显示到上方块」的穿透
