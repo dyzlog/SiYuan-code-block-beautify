@@ -235,7 +235,9 @@ function renderLongCodeBar(
     btn = document.createElement("button")
     btn.type = "button"
     btn.className = BTN_CLASS
-    btn.addEventListener("click", () => {
+    // 按钮 pointer-events:none（不拦截鼠标，避免干扰思源文本选择 hit-test）。
+    // 点击通过 codeBlock 上的 click 委托：判断点击坐标是否落在按钮矩形内。
+    const toggle = () => {
       const folded = !isFolded(codeBlock)
       if (folded) {
         codeBlock.dataset[FOLDED_ATTR] = "1"
@@ -252,6 +254,17 @@ function renderLongCodeBar(
       // 收起后自动滚动：让代码块顶部（第一行）落在视口中间，直接看到折叠效果
       if (folded) {
         centerBlockInViewport(codeBlock)
+      }
+    }
+    // 委托：仅当点击坐标命中按钮矩形时触发（click 冒泡自 codeBlock，
+    // 不影响思源对代码块的其它点击处理）
+    codeBlock.addEventListener("click", (e: MouseEvent) => {
+      const rect = btn?.getBoundingClientRect()
+      if (rect && e.clientX >= rect.left && e.clientX <= rect.right
+        && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+        e.preventDefault()
+        e.stopPropagation()
+        toggle()
       }
     })
     getOverlay(codeBlock).appendChild(btn)

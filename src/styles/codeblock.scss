@@ -228,8 +228,9 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 3;
-  /* 默认不拦截鼠标（拖选多行经过按钮区时，思源 elementFromPoint 会命中按钮
-     而非代码文本 → 误判「拖出代码块」→ 块选中）。仅悬停在按钮上时可点击。 */
+  /* 永远不拦截鼠标：overlay 任何子元素 pointer-events:auto 都会让思源
+     elementFromPoint 命中它而非代码文本 → 误判「拖出代码块」→ 框选闪烁。
+     按钮点击由 codeBlock 上的 click 委托处理（坐标命中按钮区域）。 */
   pointer-events: none;
   padding: 2px 16px;
   font-size: 12px;
@@ -241,12 +242,6 @@
   cursor: pointer;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   transition: opacity 0.2s;
-
-  /* 悬停代码块时恢复可点击（overlay 是 .code-block 的紧邻兄弟节点，
-     用相邻兄弟选择器；拖选多行时鼠标在按钮上才命中，不干扰文本选择） */
-  .code-block:hover + .cb-overlay & {
-    pointer-events: auto;
-  }
 
   &:hover {
     background-color: var(--b3-theme-background-light);
