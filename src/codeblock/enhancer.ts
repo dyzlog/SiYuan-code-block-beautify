@@ -30,6 +30,7 @@ import {
 import "./code-stats"
 import "./current-line"
 import "./longcode"
+import "./selection-guard"
 
 const CODE_BLOCK_SELECTOR = ".code-block"
 /** 扫描防抖下限（ms）——scheduleIdle 空闲调度的基础等待 */
