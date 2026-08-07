@@ -2,7 +2,7 @@
   "name": "code-block-beautify",
   "author": "dyzlog",
   "url": "https://github.com/dyzlog/SiYuan-code-block-beautify",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "minAppVersion": "2.10.14",
   "disabledInPublish": true,
   "backends": [
