@@ -280,6 +280,12 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
   if (!ov || !ov.isConnected) {
     ov = document.createElement("div")
     ov.className = "cb-overlay"
+    // 记录所属代码块 id：孤儿清理时据此判断 overlay 是否仍对应存在的代码块
+    // （overlay 插在 wysiwyg 最前面，无法用兄弟关系判断归属）
+    const ownerId = codeBlock.getAttribute("data-node-id")
+    if (ownerId) {
+      ov.setAttribute("data-cb-owner", ownerId)
+    }
     // overlay 必须完全透明于浏览器 selection 系统：
     // - 不加 contenteditable="false"：不可编辑区域是 selection 强制边界，拖选
     //   代码文本越出 .hljs 时 selection 被收缩/重定位 → 思源进入框选模式 →

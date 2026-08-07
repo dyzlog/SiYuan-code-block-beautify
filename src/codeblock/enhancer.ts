@@ -221,9 +221,11 @@ function scan(scope: "pending" | "all" = "all") {
   pendingBlocks.clear()
   // 兜底：清理与代码块失联的孤儿 overlay（removedNodes 已做清理，这里是最后防线，
   // 覆盖代码块被移动/替换等 MutationObserver 未捕获的边角场景）
-  // overlay 是 codeBlock 的兄弟节点（合法时其前一个兄弟是代码块）
+  // overlay 插在 .protyle-wysiwyg 最前面（data-cb-owner 记录所属代码块 id），
+  // 无法用兄弟关系判断归属——校验所属代码块是否仍在文档中
   document.querySelectorAll<HTMLElement>(".cb-overlay").forEach((ov) => {
-    if (!ov.previousElementSibling?.matches(CODE_BLOCK_SELECTOR)) {
+    const ownerId = ov.getAttribute("data-cb-owner")
+    if (!ownerId || !document.querySelector(`[data-node-id="${ownerId}"]`)) {
       ov.remove()
     }
   })
@@ -313,9 +315,13 @@ function verify(codeBlock: HTMLElement) {
   if (!settings) {
     return
   }
-  // overlay 是 codeBlock 的兄弟节点（思源重渲染若移除了它，需重新增强）
-  const ov = codeBlock.nextElementSibling
-  if (!ov || !ov.classList.contains("cb-overlay")) {
+  // overlay 插在 .protyle-wysiwyg 最前面（data-cb-owner 记录所属代码块 id）。
+  // 思源重渲染若移除了它，需重新增强。
+  const ownerId = codeBlock.getAttribute("data-node-id")
+  const ov = ownerId
+    ? document.querySelector<HTMLElement>(`.cb-overlay[data-cb-owner="${ownerId}"]`)
+    : null
+  if (!ov) {
     enhance(codeBlock)
   }
 }
