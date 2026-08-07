@@ -66,14 +66,11 @@
           <option value="solid">
             实线
           </option>
-          <option value="pixel">
-            像素游戏
-          </option>
           <option value="dashed">
             虚线
           </option>
-          <option value="handdrawn">
-            手绘感
+          <option value="glass">
+            毛玻璃
           </option>
         </select>
       </div>

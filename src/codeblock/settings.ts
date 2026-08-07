@@ -109,8 +109,8 @@ export function applySettingsVars(s: CodeBlockSettings) {
   })
 }
 
-/** 边框样式集合（solid 为默认，无 class） */
-const BORDER_STYLES = ["solid", "pixel", "dashed", "handdrawn"]
+/** 边框样式集合（solid 为默认，无 class；pixel/handdrawn 已移除但仍清理旧 class） */
+const BORDER_STYLES = ["solid", "pixel", "dashed", "handdrawn", "glass"]
 
 /**
  * 给单个代码块应用边框样式 class（幂等：先移除全部再添加）。
