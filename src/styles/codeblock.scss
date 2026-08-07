@@ -92,6 +92,9 @@
   height: 24px;
   z-index: 3;
   pointer-events: none;
+  /* flex：装饰（圆点/符号）在左，收起按钮（margin-left:auto）在右 */
+  display: flex;
+  align-items: center;
   /* 背景透明：圆角同步外观设置（顶部两角跟随代码块圆角） */
   background-color: transparent;
   border-radius: var(--cb-radius, 8px) var(--cb-radius, 8px) 0 0;
@@ -222,16 +225,12 @@
 }
 
 /* 底部「收起/展开」按钮 */
+/* 长代码「收起/展开」按钮：位于顶部装饰栏 bar 内（右侧），不覆盖代码文本区，
+   拖选多行不会命中按钮，杜绝 selection 边界干扰。 */
 .cb-longcode-btn {
-  position: absolute;
-  bottom: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 3;
-  /* 按钮必须可点（长代码收起/展开）。命中区即按钮本身——小按钮范围，
-     拖选多行时鼠标大概率不经过，不影响思源对代码文本的拖选判定。
-     overlay 是 .code-block 的兄弟节点，按钮只在其自身区域内响应。 */
   pointer-events: auto;
+  margin-left: auto;
+  margin-right: 6px;
   padding: 1px 10px;
   font-size: 11px;
   line-height: 16px;
@@ -242,6 +241,7 @@
   cursor: pointer;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   transition: opacity 0.2s;
+  white-space: nowrap;
 
   &:hover {
     background-color: var(--b3-theme-background-light);
