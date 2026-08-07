@@ -280,7 +280,12 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
   if (!ov || !ov.isConnected) {
     ov = document.createElement("div")
     ov.className = "cb-overlay"
-    ov.setAttribute("contenteditable", "false")
+    // overlay 必须完全透明于浏览器 selection 系统：
+    // - 不加 contenteditable="false"：不可编辑区域是 selection 强制边界，拖选
+    //   代码文本越出 .hljs 时 selection 被收缩/重定位 → 思源进入框选模式 →
+    //   反复加 protyle-wysiwyg--select（闪烁，用户时间线实测）
+    // - 不加 user-select: none：同样是「不可选边界」
+    // 只靠 pointer-events: none 隔离鼠标交互；overlay 是纯视觉层。
     ov.style.position = "absolute"
     ov.style.left = "0"
     ov.style.top = "0"

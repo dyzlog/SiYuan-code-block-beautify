@@ -242,8 +242,9 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   transition: opacity 0.2s;
 
-  /* 悬停代码块时恢复可点击（此时用户意图是操作按钮，不是拖选） */
-  .code-block:hover & {
+  /* 悬停代码块时恢复可点击（overlay 是 .code-block 的紧邻兄弟节点，
+     用相邻兄弟选择器；拖选多行时鼠标在按钮上才命中，不干扰文本选择） */
+  .code-block:hover + .cb-overlay & {
     pointer-events: auto;
   }
 
