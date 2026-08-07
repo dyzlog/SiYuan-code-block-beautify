@@ -323,35 +323,6 @@
         <span class="cb-setting__hint">留空跟随主题</span>
       </div>
       <div class="cb-setting__item fn__flex">
-        <span class="cb-setting__label">当前行高亮</span>
-        <label class="fn__flex">
-          <input
-            v-model="form.currentLineHighlight"
-            type="checkbox"
-            class="b3-switch fn__flex-center"
-          >
-        </label>
-        <span class="cb-setting__hint">跟随输入光标</span>
-      </div>
-      <div
-        v-if="form.currentLineHighlight"
-        class="cb-setting__item fn__flex"
-      >
-        <span class="cb-setting__label">高亮颜色</span>
-        <input
-          v-model="form.currentLineColor"
-          type="color"
-          class="b3-color-picker fn__flex-center cb-setting__color"
-        >
-        <button
-          class="b3-button b3-button--outline fn__flex-center cb-setting__reset-btn"
-          @click="form.currentLineColor = ''"
-        >
-          清除
-        </button>
-        <span class="cb-setting__hint">留空使用主题默认</span>
-      </div>
-      <div class="cb-setting__item fn__flex">
         <span class="cb-setting__label">语法高亮主题</span>
         <select
           v-model="form.highlightTheme"

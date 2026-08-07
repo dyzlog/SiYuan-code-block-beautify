@@ -28,10 +28,6 @@ export interface CodeBlockSettings {
   backgroundMaskOpacity: number
   /** 阴影大小 (px)，正数 = 下投影（上凸），负数 = 内嵌（下凹），0 = 无 */
   shadowSize: number
-  /** 当前行高亮（跟随输入光标） */
-  currentLineHighlight: boolean
-  /** 当前行高亮颜色（空 = 跟随主题默认半透明） */
-  currentLineColor: string
   /** 代码统计角标（底部显示行数/字符数） */
   codeStats: boolean
   /** 思源原生行号开关（同步 window.siyuan.config.editor.codeSyntaxHighlightLineNum） */
@@ -61,8 +57,6 @@ export const DEFAULT_SETTINGS: CodeBlockSettings = {
   backgroundBlur: 16,
   backgroundMaskOpacity: 78,
   shadowSize: 8,
-  currentLineHighlight: true,
-  currentLineColor: "",
   codeStats: true,
   showLineNumber: true,
   highlightTheme: "",
@@ -103,7 +97,6 @@ export function applySettingsVars(s: CodeBlockSettings) {
   root.style.setProperty("--cb-bg-color", s.backgroundColor)
   root.style.setProperty("--cb-bg-blur", `${s.backgroundBlur}px`)
   root.style.setProperty("--cb-bg-mask-opacity", `${s.backgroundMaskOpacity}%`)
-  root.style.setProperty("--cb-current-line-color", s.currentLineColor)
   // 代码字体（空值时回退跟随主题）
   root.style.setProperty("--cb-code-font-family", s.codeFontFamily)
   // 负数：内嵌阴影（顶部深内嵌 + 底部浅内嵌，凹陷感更明显）

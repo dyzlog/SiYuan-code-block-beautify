@@ -299,17 +299,6 @@
   user-select: none;
 }
 
-/* ---------------- 当前行高亮 ---------------- */
-.cb-current-line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  z-index: 0;
-  pointer-events: none;
-  background-color: var(--cb-current-line-color, var(--b3-theme-primary-lightest, rgba(0, 120, 212, 0.08)));
-  border-radius: 4px;
-}
-
 /* ---------------- 设置面板 ---------------- */
 .cb-setting__title {
   font-size: 15px;

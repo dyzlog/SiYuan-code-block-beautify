@@ -28,7 +28,6 @@ import {
 // 装饰模块（副作用：各自 registerDecor 注册，供 enhanceAll 调用）——
 // 必须显式 import，否则 Vite tree-shake 会移除未引用的模块，导致对应功能失效
 import "./code-stats"
-import "./current-line"
 import "./longcode"
 import "./selection-guard"
 

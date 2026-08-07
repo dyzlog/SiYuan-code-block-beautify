@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 /**
- * overlay 定位回归测试：锚定 .protyle-wysiwyg 方案。
- * transform = codeBlock 相对 wysiwyg 的偏移（滚动时不变，原生跟随）；
- * onScroll 只更新 clip 裁剪。
+ * overlay 定位回归测试：overlay 是 codeBlock 的内部子元素（absolute inset:0）。
+ * - 随 codeBlock 自动定位/滚动，无 transform
+ * - 不修改 .protyle-wysiwyg 的 position
+ * - 尺寸与 codeBlock 一致
+ * - 滚动裁剪（clip-path）仅在视口外时隐藏
  */
 import { describe, expect, it } from "vitest"
 
@@ -33,7 +35,7 @@ function makeRect(left: number, top: number, width: number, height: number): DOM
   } as DOMRect
 }
 
-function buildEditor(): { code: HTMLElement; ov: HTMLElement } {
+function buildEditor(): { code: HTMLElement; ov: HTMLElement; wysiwyg: HTMLElement } {
   const protyle = document.createElement("div")
   protyle.className = "protyle"
   protyle.style.position = "relative"
@@ -56,57 +58,42 @@ function buildEditor(): { code: HTMLElement; ov: HTMLElement } {
   protyle.appendChild(content)
   document.body.appendChild(protyle)
 
-  // mock：wysiwyg 在 (0,0)，codeBlock 在 (100, 200)（相对 wysiwyg 的偏移）
   protyle.getBoundingClientRect = () => makeRect(0, 0, 800, 600)
   content.getBoundingClientRect = () => makeRect(0, 0, 800, 600)
   wysiwyg.getBoundingClientRect = () => makeRect(0, 0, 800, 600)
   code.getBoundingClientRect = () => makeRect(100, 200, 400, 120)
 
   const ov = getOverlay(code)
-  return { code, ov }
+  return { code, ov, wysiwyg }
 }
 
-function transformOf(ov: HTMLElement): { x: number; y: number } | null {
-  const m = ov.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/)
-  if (!m) {
-    return null
-  }
-  return { x: Number.parseFloat(m[1]), y: Number.parseFloat(m[2]) }
-}
+describe("overlay 内部子元素定位", () => {
+  it("overlay 是 codeBlock 的子元素（非兄弟），absolute inset 0", () => {
+    const { code, ov } = buildEditor()
+    expect(ov.parentElement).toBe(code)
+    expect(ov.style.position).toBe("absolute")
+    expect(ov.style.inset).toBe("0px")
+    expect(ov.style.transform).toBe("")
+    document.body.innerHTML = ""
+  })
 
-describe("overlay 锚定 wysiwyg 定位", () => {
-  it("transform = codeBlock 相对 wysiwyg 的偏移（首次定位正确）", () => {
+  it("不修改 .protyle-wysiwyg 的 position（不污染思源布局）", () => {
+    const { wysiwyg } = buildEditor()
+    expect(wysiwyg.style.position).toBe("")
+    document.body.innerHTML = ""
+  })
+
+  it("尺寸与 codeBlock 一致（内部装饰绝对定位依赖）", () => {
     const { ov } = buildEditor()
-    // wysiwyg 在 (0,0)，codeBlock 在 (100,200) → transform = (100, 200)
-    const t = transformOf(ov)
-    expect(t).not.toBeNull()
-    expect(t!.x).toBe(100)
-    expect(t!.y).toBe(200)
+    expect(ov.style.width).toBe("400px")
+    expect(ov.style.height).toBe("120px")
     document.body.innerHTML = ""
   })
 
-  it("滚动后（两者一起移动）transform 不变——原生跟随，无浮动", async () => {
-    const { code, ov } = buildEditor()
-    // 滚动后 wysiwyg 和 codeBlock 一起上移 150px（视口坐标同步变化）
-    const wysiwyg = code.parentElement!
-    wysiwyg.getBoundingClientRect = () => makeRect(0, -150, 800, 600)
-    code.getBoundingClientRect = () => makeRect(100, 50, 400, 120)
-    // 触发同步（真实滚动走 onScroll 只更新 clip，不更新 transform）
-    await new Promise((r) => setTimeout(r, 20))
-    getOverlay(code)
-    const t = transformOf(ov)
-    expect(t).not.toBeNull()
-    // transform 保持不变（相对 wysiwyg 偏移恒定）→ 零浮动
-    expect(t!.y).toBe(200)
-    document.body.innerHTML = ""
-  })
-
-  it("overlay 与 codeBlock 是兄弟节点，wysiwyg 获得 position: relative", () => {
-    const { code, ov } = buildEditor()
-    expect(ov.parentElement).toBe(code.parentElement)
-    expect(ov.previousElementSibling).toBe(code)
-    const wysiwyg = code.parentElement!
-    expect(wysiwyg.style.position).toBe("relative")
+  it("不可编辑 + 不拦截鼠标（纯视觉层）", () => {
+    const { ov } = buildEditor()
+    expect(ov.getAttribute("contenteditable")).toBe("false")
+    expect(ov.style.pointerEvents).toBe("none")
     document.body.innerHTML = ""
   })
 })
