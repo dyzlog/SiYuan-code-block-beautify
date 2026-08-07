@@ -28,7 +28,7 @@ function updateStats(codeBlock: HTMLElement) {
   badge.textContent = `${lines} 行 · ${chars} 字符`
 }
 
-/** 初始化代码统计角标（开启时创建并跟随输入更新，关闭时移除） */
+/** 初始化代码统计角标（开启时创建；编辑中不统计，退出编辑后重新统计） */
 function initCodeStats(codeBlock: HTMLElement, enabled: boolean) {
   if (!enabled) {
     removeCodeStats(codeBlock)
@@ -46,9 +46,12 @@ function initCodeStats(codeBlock: HTMLElement, enabled: boolean) {
     badge.setAttribute("contenteditable", "false")
     ov.appendChild(badge)
   }
+  // 非编辑状态统计一次（打开文档 / 代码块渲染即统计）
   updateStats(codeBlock)
-  codeBlock.querySelector<HTMLElement>(".hljs")
-    ?.addEventListener("input", () => updateStats(codeBlock), { signal: ac.signal })
+  // 编辑中不实时统计（避免干扰输入 / 性能开销）：
+  // 退出编辑（focusout）时重新统计，反映编辑后的行数/字符数。
+  const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
+  hljs?.addEventListener("focusout", () => updateStats(codeBlock), { signal: ac.signal })
 }
 
 /** 移除统计角标并解除监听 */
