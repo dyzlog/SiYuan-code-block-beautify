@@ -344,6 +344,17 @@ function enhance(codeBlock: HTMLElement) {
     hljs,
     settings,
   })
+  // 编辑结束（focusout）后重新增强：新建/编辑的代码块在编辑态可能未初始化
+  // （统计角标、收起按钮需编辑完成后刷新）。重置 cbEnhanced 后重新 enhance，
+  // 让统计与折叠按钮反映编辑后的内容。
+  if (hljs && !codeBlock.dataset.cbEditRefresh) {
+    codeBlock.dataset.cbEditRefresh = "1"
+    hljs.addEventListener("focusout", () => {
+      // 编辑结束立即刷新（不等待重启/重渲染）
+      delete codeBlock.dataset.cbEnhanced
+      enhance(codeBlock)
+    })
+  }
 }
 
 /**
