@@ -358,14 +358,27 @@ function enhance(codeBlock: HTMLElement) {
     codeBlock.dataset.cbEditRefresh = "1"
     codeBlock.addEventListener("focusout", () => {
       const dbg = (window as any).__CB_DEBUG
-      const hljsNow = codeBlock.querySelector<HTMLElement>(".hljs")
-      if (dbg) {
-        const id = codeBlock.getAttribute("data-node-id")
-        console.log(`[cb-debug] focusout id=${id} enhanced=${codeBlock.dataset.cbEnhanced} lines_now=${hljsNow ? getCodeText(hljsNow).split("\n").length : "?"}`)
+      const id = codeBlock.getAttribute("data-node-id")
+      // 编辑结束立即刷新（不等待重启/重渲染）。
+      // 关键：思源退出编辑后是「异步」重渲染 .hljs——立即 enhance 会读到
+      // 旧/空内容（角标显示 1 行 1 字符）。延迟多次尝试，直到 .hljs 行数
+      // 稳定（思源重渲染完成）再重新增强。
+      const tryRefresh = (attempt: number) => {
+        const hljsNow = codeBlock.querySelector<HTMLElement>(".hljs")
+        const linesNow = hljsNow ? getCodeText(hljsNow).split("\n").length : 0
+        if (dbg) {
+          console.log(`[cb-debug] focusout id=${id} attempt=${attempt} lines_now=${linesNow}`)
+        }
+        // 行数 > 0 且非"1 行 1 字符"（编辑占位）→ 内容就绪，重新增强
+        const text = hljsNow ? getCodeText(hljsNow).trim() : ""
+        if (attempt >= 8 || (text.length > 1 && linesNow > 0)) {
+          delete codeBlock.dataset.cbEnhanced
+          enhance(codeBlock)
+          return
+        }
+        window.setTimeout(() => tryRefresh(attempt + 1), 80)
       }
-      // 编辑结束立即刷新（不等待重启/重渲染）
-      delete codeBlock.dataset.cbEnhanced
-      enhance(codeBlock)
+      tryRefresh(0)
     })
   }
 }
