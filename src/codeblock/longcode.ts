@@ -232,6 +232,7 @@ function renderLongCodeBar(
     btn = document.createElement("button")
     btn.type = "button"
     btn.className = BTN_CLASS
+    btn.setAttribute("contenteditable", "false")
     // 按钮 pointer-events:none（不拦截鼠标，避免干扰思源文本选择 hit-test）。
     // 点击通过 codeBlock 上的 click 委托：判断点击坐标是否落在按钮矩形内。
     const toggle = () => {
