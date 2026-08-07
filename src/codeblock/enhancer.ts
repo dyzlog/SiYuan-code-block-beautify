@@ -8,6 +8,7 @@ import type { Plugin } from "siyuan"
 import type { CodeBlockSettings } from "./settings"
 import {
   ENHANCED_VALUE,
+  getCodeText,
   scheduleIdle,
 } from "../utils/dom"
 import {
@@ -338,6 +339,10 @@ function enhance(codeBlock: HTMLElement) {
   // 应用边框样式 class（滚动刷新后新增强的块也带上当前边框样式）
   applyBorderStyleClass(codeBlock, settings.borderStyle)
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
+  if ((window as any).__CB_DEBUG) {
+    const id = codeBlock.getAttribute("data-node-id")
+    console.log(`[cb-debug] enhance called id=${id} enhanced=${codeBlock.dataset.cbEnhanced} hljs=${!!hljs} lines=${hljs ? getCodeText(hljs).split("\n").length : "?"}`)
+  }
   // 装饰增强：背景/纹理/当前行高亮/统计角标/长代码条（注册表统一调度）
   enhanceAll({
     codeBlock,
@@ -347,9 +352,17 @@ function enhance(codeBlock: HTMLElement) {
   // 编辑结束（focusout）后重新增强：新建/编辑的代码块在编辑态可能未初始化
   // （统计角标、收起按钮需编辑完成后刷新）。重置 cbEnhanced 后重新 enhance，
   // 让统计与折叠按钮反映编辑后的内容。
-  if (hljs && !codeBlock.dataset.cbEditRefresh) {
+  // 注意：focusout 绑在 codeBlock 上（事件冒泡），而非 .hljs——思源编辑时
+  // 可能重建 .hljs 子元素，绑在其上会因元素替换而失效。
+  if (!codeBlock.dataset.cbEditRefresh) {
     codeBlock.dataset.cbEditRefresh = "1"
-    hljs.addEventListener("focusout", () => {
+    codeBlock.addEventListener("focusout", () => {
+      const dbg = (window as any).__CB_DEBUG
+      const hljsNow = codeBlock.querySelector<HTMLElement>(".hljs")
+      if (dbg) {
+        const id = codeBlock.getAttribute("data-node-id")
+        console.log(`[cb-debug] focusout id=${id} enhanced=${codeBlock.dataset.cbEnhanced} lines_now=${hljsNow ? getCodeText(hljsNow).split("\n").length : "?"}`)
+      }
       // 编辑结束立即刷新（不等待重启/重渲染）
       delete codeBlock.dataset.cbEnhanced
       enhance(codeBlock)

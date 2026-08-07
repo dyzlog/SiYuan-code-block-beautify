@@ -374,6 +374,9 @@ registerDecor({
   selfSelector: ".cb-longcode-bar, .cb-longcode-btn",
   enhance: (ctx) => {
     // 长代码条/主题装饰栏渲染入口（原由行号渲染流程触发，行号列删除后改由注册表驱动）
+    if ((window as any).__CB_DEBUG) {
+      console.log("[cb-debug] longcode enhance", ctx.codeBlock.dataset.cbEnhanced, "lines=", getCodeText(ctx.hljs).split("\n").length)
+    }
     if (ctx.hljs) {
       renderLongCodeSection(ctx.codeBlock, ctx.hljs, ctx.settings, getCodeText(ctx.hljs))
     }

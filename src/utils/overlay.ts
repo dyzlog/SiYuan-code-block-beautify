@@ -1,22 +1,19 @@
 /**
  * Overlay 层：插件注入元素的兄弟容器（污染根治）。
  *
- * 所有视觉装饰元素（行号列/统计角标/当前行高亮/长代码条等）
- * 必须挂在 codeBlock 的「兄弟 overlay」上，而不是 codeBlock 内部——
- * 否则思源序列化代码块内容（updateTransaction 读 element.outerHTML）时
- * 会把装饰 DOM 写进文档，永久污染用户代码。
+ * 所有视觉装饰元素（统计角标/长代码条/收起按钮等）挂在 codeBlock 的
+ * 「兄弟 overlay」上，而不是 codeBlock 内部——否则思源序列化代码块内容
+ * （updateTransaction 读 element.outerHTML）时会把装饰 DOM 写进文档，
+ * 永久污染用户代码。
  *
- * 定位方案：position: absolute + 锚定 .protyle-wysiwyg（滚动内容）。
- * - 给 .protyle-wysiwyg 加 position: relative（仅一个声明，已验证不影响
- *   思源内部任何 absolute 子元素：块标是 fixed、块内元素锚定块自身、
- *   伪元素锚定主体），overlay 的 offsetParent 变为 wysiwyg
- * - 滚动时 overlay 作为 wysiwyg 内元素随内容「浏览器原生跟随」——
- *   onScroll 只做 clip-path 裁剪与可见性，不更新 transform（零浮动）
- * - transform 仅在布局变化（ResizeObserver：增删/折叠/懒加载）时更新
- * - 同生共死：clip-path: inset() 裁剪到与代码块相同的可视区；
- *   完全滚出时 visibility: hidden
- * - z-index: 1（思源 dialog 用 ++window.siyuan.zIndex 动态递增、从 10 起步，
- *   永远高于 1，因此 overlay 绝不会穿透 dialog/menu）
+ * 定位方案：overlay 插到 codeBlock 的父容器内、codeBlock 之前（兄弟）：
+ * - 不在 codeBlock 内部 → outerHTML 序列化不带走（不污染）
+ * - 在 codeBlock 之前 → 思源块框选从 codeBlock 开始向后（nextElementSibling）
+ *   遍历兄弟链，不会回头经过前面的 overlay（不闪烁）
+ * - 与 codeBlock 同父 → transform 用 offsetTop/offsetLeft 相对同一 offsetParent
+ *   的差值，即精确位置（无嵌套/滚动坐标系问题）
+ * - 滚动时父容器内容一起移动，差值不变 → transform 无需更新（零浮动）
+ * - 同生共死：clip-path: inset() 裁剪到与代码块相同的可视区；完全滚出时隐藏
  * - ResizeObserver 跟随尺寸变化（折叠/编辑导致的行高变化）
  */
 const overlayMap = new WeakMap<HTMLElement, HTMLElement>()
@@ -173,16 +170,12 @@ function syncOverlay(codeBlock: HTMLElement, ov: HTMLElement) {
       syncedThisFrame = new WeakSet<HTMLElement>()
     })
   }
-  // 布局变化（ResizeObserver 触发）时重算 codeBlock 相对锚定容器的偏移
-  const anchor = codeBlock.closest<HTMLElement>(".protyle-wysiwyg")
-  if (anchor) {
-    const parentRect = anchor.getBoundingClientRect()
-    const blockRect = codeBlock.getBoundingClientRect()
-    staticOffsets.set(ov, {
-      left: blockRect.left - parentRect.left,
-      top: blockRect.top - parentRect.top,
-    })
-  }
+  // 布局变化（ResizeObserver 触发）时重算偏移：overlay 与 codeBlock 同父，
+  // offsetTop/offsetLeft 相对同一 offsetParent，差值即精确位置
+  staticOffsets.set(ov, {
+    left: codeBlock.offsetLeft - ov.offsetLeft,
+    top: codeBlock.offsetTop - ov.offsetTop,
+  })
   applyGeom(ov, readGeom(codeBlock))
 }
 
@@ -305,34 +298,25 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
     // hidden 把移出的部分裁掉，杜绝「下方块内容显示到上方块」的穿透
     ov.style.overflow = "hidden"
     const parent = codeBlock.parentElement
-    const anchor = codeBlock.closest<HTMLElement>(".protyle-wysiwyg")
-    // 关键：overlay 必须插到 .protyle-wysiwyg 的「最前面」而非 codeBlock 之后。
-    // 思源 mousedown 后的块框选逻辑从 codeBlock 开始向后（nextElementSibling）
-    // 遍历兄弟链，若 overlay 在 codeBlock 之后会被遍历命中 → 反复加
-    // protyle-wysiwyg--select（拖选闪烁，用户实测）。插到最前面后，向后遍历
-    // 永远不会经过它（遍历只向后不回头）→ 不闪烁。
-    // 同时 overlay 是 codeBlock 的兄弟（不在其内部）→ 思源 outerHTML 序列化
-    // 不会带走它 → 不污染原代码。
-    if (anchor && anchor !== parent) {
-      anchor.insertBefore(ov, anchor.firstChild)
-    } else if (parent) {
-      parent.insertBefore(ov, parent.firstChild)
+    // 关键：overlay 插到 codeBlock 的「父容器内、codeBlock 之前」（兄弟）。
+    // - 不在 codeBlock 内部 → 思源 outerHTML 序列化不会带走它（不污染）
+    // - 在 codeBlock 之前 → 思源块框选从 codeBlock 开始向后遍历 nextElementSibling，
+    //   不会回头经过前面的 overlay（不闪烁）
+    // - 与 codeBlock 同父 → transform 用 codeBlock.offsetTop/offsetLeft 相对
+    //   同一 offsetParent，差值即精确位置（无嵌套/滚动坐标系问题）
+    if (parent) {
+      parent.insertBefore(ov, codeBlock)
     }
     overlayMap.set(codeBlock, ov)
     activeBlocks.add(codeBlock)
     scrollerMap.set(codeBlock, codeBlock.closest<HTMLElement>(".protyle-content"))
-    // 锚定 .protyle-wysiwyg（滚动内容）：加 position: relative 使 overlay
-    // 的 offsetParent 变为 wysiwyg → 滚动时 overlay 随内容原生跟随。
-    // 已验证不影响思源内部 absolute 子元素（块标 fixed、块内锚定块自身）。
-    if (anchor && !anchor.style.position) {
-      anchor.style.position = "relative"
-    }
-    // 记录 codeBlock 相对锚定容器的偏移（滚动时恒定，transform 基准）
-    const parentRect = anchor ? anchor.getBoundingClientRect() : null
-    const blockRect = codeBlock.getBoundingClientRect()
+    // 记录 codeBlock 相对 overlay 的布局偏移（transform 基准）。
+    // overlay 与 codeBlock 同父（absolute left:0 top:0），两者 offsetParent
+    // 相同 → offsetTop/offsetLeft 差值即精确位置。滚动时父容器内容一起移动，
+    // 差值不变 → transform 无需更新（零浮动零计算）。
     staticOffsets.set(ov, {
-      left: parentRect ? blockRect.left - parentRect.left : 0,
-      top: parentRect ? blockRect.top - parentRect.top : 0,
+      left: codeBlock.offsetLeft - ov.offsetLeft,
+      top: codeBlock.offsetTop - ov.offsetTop,
     })
     ensureWheelForward(codeBlock, ov)
     // 位置/尺寸变化自动跟随：共享 ResizeObserver 观察该块（布局变化时重新定位）

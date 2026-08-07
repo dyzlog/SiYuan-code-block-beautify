@@ -71,15 +71,18 @@ describe("overlay 兄弟节点定位", () => {
     const { code, ov, wysiwyg } = buildEditor()
     // 不在 codeBlock 内部 → 思源 outerHTML 序列化不会带走它（防污染）
     expect(code.contains(ov)).toBe(false)
-    // 插在 wysiwyg 最前面 → 思源块框选向后遍历不会经过它（不闪烁）
+    // 与 codeBlock 同父（wysiwyg），插在 codeBlock 之前（避开向后遍历）
     expect(ov.parentElement).toBe(wysiwyg)
-    expect(wysiwyg.firstElementChild).toBe(ov)
+    expect(ov.nextElementSibling).toBe(code)
     document.body.innerHTML = ""
   })
 
-  it("overlay 锚定 .protyle-wysiwyg（获得 position: relative）", () => {
-    const { wysiwyg } = buildEditor()
-    expect(wysiwyg.style.position).toBe("relative")
+  it("overlay 在 codeBlock 之前（兄弟，避开向后遍历）且不修改 wysiwyg 样式", () => {
+    const { code, ov, wysiwyg } = buildEditor()
+    // 在 codeBlock 之前（思源块框选从 codeBlock 向后遍历，不经过它）
+    expect(ov.nextElementSibling).toBe(code)
+    // 不修改 wysiwyg 的 position（不污染思源布局）
+    expect(wysiwyg.style.position).toBe("")
     document.body.innerHTML = ""
   })
 
