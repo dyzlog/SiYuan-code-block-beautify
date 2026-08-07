@@ -112,7 +112,7 @@
   /* 终端提示符：❯_ 左侧留白并垂直居中 */
   .cb-longcode-terminal {
     position: absolute;
-    left: var(--cb-bar-decor-left, 12px);
+    left: 12px;
     top: 50%;
     transform: translateY(-50%);
     font-size: 13px;
@@ -123,7 +123,7 @@
   /* 代码符号：</> 左侧留白并垂直居中 */
   .cb-longcode-codesym {
     position: absolute;
-    left: var(--cb-bar-decor-left, 12px);
+    left: 12px;
     top: 50%;
     transform: translateY(-50%);
     font-size: 13px;
@@ -134,7 +134,7 @@
   /* Mac / Ubuntu / 终端：左侧圆点 */
   .cb-longcode-dots {
     position: absolute;
-    left: var(--cb-bar-decor-left, 12px);
+    left: 12px;
     top: 50%;
     transform: translateY(-50%);
     display: flex;
