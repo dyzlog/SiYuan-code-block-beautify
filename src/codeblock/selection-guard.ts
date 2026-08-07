@@ -435,11 +435,8 @@ function clearBlockSelect() {
     debugSelectionState("clearBlockSelect skipped", sel, hljs)
     return
   }
-  // 移除拖选覆盖 class（恢复思源原生块选中能力）
-  document.querySelectorAll<HTMLElement>(".cb-drag-selecting").forEach((el) => {
-    el.classList.remove("cb-drag-selecting")
-  })
-  // 移除思源块选中标记（视觉上恢复「选中文本」而非「选中整个块」）
+  // 移除思源块选中标记（mouseup 后选择已结束，此时移除安全；
+  // 拖选期间不能移除——会破坏思源的多行文本选择流程）
   document.querySelectorAll<HTMLElement>(".protyle-wysiwyg--select").forEach((el) => {
     el.classList.remove("protyle-wysiwyg--select")
   })
@@ -447,51 +444,13 @@ function clearBlockSelect() {
 }
 
 /**
- * 拖选期间处理：
- * 1. 给代码块加 .cb-drag-selecting（CSS 覆盖块选中视觉，避免闪烁——不加时
- *    思源同帧又加标记，移除+重加=闪烁）
- * 2. 移除思源块选中标记
+ * 安装 document 级 mouseup（只绑定一次；插件卸载时通过 destroySelectionGuard 移除）。
+ * 清理逻辑：mouseup 后多重 setTimeout 调用 clearBlockSelect（移除代码块上的
+ * protyle-wysiwyg--select 块选中标记，保留原生文本选择）。
+ *
+ * 注意：曾尝试在拖选期间（mousemove/selectionchange）实时清理，但会破坏
+ * 思源/浏览器的原生多行文本选择——已放弃实时干预，只做 mouseup 后清理。
  */
-let realtimeClearInstalled = false
-
-function installRealtimeClear() {
-  if (realtimeClearInstalled) {
-    return
-  }
-  realtimeClearInstalled = true
-  document.addEventListener("selectionchange", () => {
-    if (!realtimeClearInstalled) {
-      return
-    }
-    const sel = window.getSelection()
-    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-      return
-    }
-    // 选区必须落在代码块内（否则不动思源的其它块选中）。
-    // 不依赖 draggingCodeText：用户可能从代码块上方段落拖入（思源框选逻辑
-    // 会给代码块临时加 protyle-wysiwyg--select 闪烁）——只要选区在代码块内
-    // 且有内容，就加覆盖 class + 清标记。
-    const hljs = resolveSelectionHljs(sel)
-    if (!hljs || !shouldClearBlockSelect(sel, hljs)) {
-      return
-    }
-    // 给代码块加拖选覆盖 class（CSS 盖掉块选中视觉，避免闪烁），再移除标记
-    const codeBlock = hljs.closest<HTMLElement>(".code-block")
-    if (codeBlock) {
-      codeBlock.classList.add("cb-drag-selecting")
-    }
-    // 检测到块选中标记就立即移除（思源拖选中持续添加）
-    const marked = document.querySelectorAll<HTMLElement>(".protyle-wysiwyg--select")
-    if (marked.length > 0) {
-      marked.forEach((el) => el.classList.remove("protyle-wysiwyg--select"))
-      if (DEBUG_SELECTION_GUARD) {
-        console.log("[selection-guard] realtime clear", marked.length, "block-select marks")
-      }
-    }
-  })
-}
-
-/** 安装 document 级 mouseup（只绑定一次；插件卸载时通过 destroySelectionGuard 移除） */
 function installDocumentMouseUp() {
   if (onDocMouseUp) {
     return
@@ -502,7 +461,6 @@ function installDocumentMouseUp() {
     }
     // 多重清理：思源可能在 mouseup 后异步重新加 protyle-wysiwyg--select，
     // 日志显示 blockSelectCount=2 在 mouseup 后仍存在——多时间点各清一次。
-    // 不依赖 draggingCodeText（从块外拖入时为 false，但同样需要清理）。
     setTimeout(clearBlockSelect, 0)
     setTimeout(clearBlockSelect, 30)
     setTimeout(clearBlockSelect, 120)
@@ -513,7 +471,6 @@ function installDocumentMouseUp() {
 /** 初始化：给代码块 .hljs 绑定 mousedown（标记拖选起点，防重复） */
 function initSelectionGuard(hljs: HTMLElement) {
   installDocumentMouseUp()
-  installRealtimeClear()
   if (boundHljs.has(hljs)) {
     return
   }
@@ -535,11 +492,6 @@ function destroySelectionGuard() {
   if (onDocMouseUp) {
     document.removeEventListener("mouseup", onDocMouseUp)
     onDocMouseUp = null
-  }
-  if (realtimeClearInstalled) {
-    // 注意：selectionchange 是匿名函数，无法单独移除。
-    // 用标志位让回调失效（插件卸载后不再清理，避免影响思源原生块选中）
-    realtimeClearInstalled = false
   }
 }
 

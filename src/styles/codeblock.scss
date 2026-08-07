@@ -397,18 +397,15 @@
   margin-right: auto;
 }
 
-/* 拖选覆盖：插件在拖选期间给代码块加 .cb-drag-selecting，盖掉思源块选中视觉，
-   避免「移除标记 → 思源同帧重加」导致的闪烁。仅覆盖视觉，不动思源标记逻辑。
-   注意：不覆盖代码块自身背景（用户自定义背景图/色保留），只盖「选中标记」
-   附加的高亮（主题对 .protyle-wysiwyg--select 的 ::after / box-shadow / outline）。 */
-.code-block.cb-beautified.cb-drag-selecting.protyle-wysiwyg--select {
+/* 拖选覆盖：思源拖选代码文本时会给代码块临时加 .protyle-wysiwyg--select（块选中
+   高亮闪烁）。这是思源选择过程的正常标记，不能移除 class（会破坏多行选择）——
+   只做 CSS 视觉覆盖：代码块上的选中高亮不显示，但思源内部逻辑不受影响。 */
+.code-block.cb-beautified.protyle-wysiwyg--select {
   box-shadow: none !important;
   outline: none !important;
   filter: none !important;
 }
 
-/* 盖掉选中标记的 ::after 高亮覆盖层（主题实现） */
-.code-block.cb-drag-selecting.protyle-wysiwyg--select::after,
-.code-block.cb-drag-selecting.protyle-wysiwyg--select *::after {
+.code-block.cb-beautified.protyle-wysiwyg--select::after {
   content: none !important;
 }
