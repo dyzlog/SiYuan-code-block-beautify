@@ -95,8 +95,8 @@ export function initCodeBlockEnhancer(p: Plugin, s: CodeBlockSettings) {
       if (target && target.closest(SELF_SELECTOR)) {
         continue
       }
-      // 代码块被删除：清理其 overlay（overlay 是 codeBlock 的内部子元素，
-      // 随 codeBlock 一并移除；此处清理 overlayMap 引用与观察器，防泄漏）
+      // 代码块被删除：清理其兄弟 overlay（overlay 是 codeBlock 的兄弟节点，
+      // 不随 codeBlock 一并移除，需显式 removeOverlay 清理，防残留/泄漏）
       for (const node of m.removedNodes) {
         if (node.nodeType !== ELEMENT_NODE) {
           continue
@@ -221,9 +221,9 @@ function scan(scope: "pending" | "all" = "all") {
   pendingBlocks.clear()
   // 兜底：清理与代码块失联的孤儿 overlay（removedNodes 已做清理，这里是最后防线，
   // 覆盖代码块被移动/替换等 MutationObserver 未捕获的边角场景）
-  // overlay 是 codeBlock 的内部子元素：合法时父节点是代码块
+  // overlay 是 codeBlock 的兄弟节点（合法时其前一个兄弟是代码块）
   document.querySelectorAll<HTMLElement>(".cb-overlay").forEach((ov) => {
-    if (!ov.parentElement?.matches(CODE_BLOCK_SELECTOR)) {
+    if (!ov.previousElementSibling?.matches(CODE_BLOCK_SELECTOR)) {
       ov.remove()
     }
   })
@@ -313,9 +313,9 @@ function verify(codeBlock: HTMLElement) {
   if (!settings) {
     return
   }
-  // overlay 是 codeBlock 的内部子元素（思源重渲染若移除了它，需重新增强）
-  const ov = codeBlock.querySelector<HTMLElement>(".cb-overlay")
-  if (!ov) {
+  // overlay 是 codeBlock 的兄弟节点（思源重渲染若移除了它，需重新增强）
+  const ov = codeBlock.nextElementSibling
+  if (!ov || !ov.classList.contains("cb-overlay")) {
     enhance(codeBlock)
   }
 }

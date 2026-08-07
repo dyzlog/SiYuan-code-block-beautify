@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 /**
- * overlay 定位回归测试：overlay 是 codeBlock 的内部子元素（absolute inset:0）。
- * - 随 codeBlock 自动定位/滚动，无 transform
- * - 不修改 .protyle-wysiwyg 的 position
- * - 尺寸与 codeBlock 一致
- * - 滚动裁剪（clip-path）仅在视口外时隐藏
+ * overlay 定位回归测试：overlay 是 codeBlock 的兄弟节点（absolute + transform）。
+ * - 不在 codeBlock 内部 → 思源序列化（outerHTML）不会带走 overlay（防污染）
+ * - 锚定 .protyle-wysiwyg（position: relative），transform 表达 codeBlock 偏移
+ * - 滚动时 transform 不变（随内容原生跟随），onScroll 只更新 clip 裁剪
  */
 import { describe, expect, it } from "vitest"
 
@@ -67,32 +66,25 @@ function buildEditor(): { code: HTMLElement; ov: HTMLElement; wysiwyg: HTMLEleme
   return { code, ov, wysiwyg }
 }
 
-describe("overlay 内部子元素定位", () => {
-  it("overlay 是 codeBlock 的子元素（非兄弟），absolute inset 0", () => {
+describe("overlay 兄弟节点定位", () => {
+  it("overlay 是 codeBlock 的兄弟节点（不在内部，防污染）", () => {
     const { code, ov } = buildEditor()
-    expect(ov.parentElement).toBe(code)
-    expect(ov.style.position).toBe("absolute")
-    expect(ov.style.inset).toBe("0px")
-    expect(ov.style.transform).toBe("")
+    expect(ov.parentElement).toBe(code.parentElement)
+    expect(ov.previousElementSibling).toBe(code)
+    // 不在 codeBlock 内部 → 思源 outerHTML 序列化不会带走它
+    expect(code.contains(ov)).toBe(false)
     document.body.innerHTML = ""
   })
 
-  it("不修改 .protyle-wysiwyg 的 position（不污染思源布局）", () => {
+  it("overlay 锚定 .protyle-wysiwyg（获得 position: relative）", () => {
     const { wysiwyg } = buildEditor()
-    expect(wysiwyg.style.position).toBe("")
+    expect(wysiwyg.style.position).toBe("relative")
     document.body.innerHTML = ""
   })
 
-  it("尺寸与 codeBlock 一致（内部装饰绝对定位依赖）", () => {
+  it("absolute 定位 + pointer-events none（纯视觉层）", () => {
     const { ov } = buildEditor()
-    expect(ov.style.width).toBe("400px")
-    expect(ov.style.height).toBe("120px")
-    document.body.innerHTML = ""
-  })
-
-  it("不可编辑 + 不拦截鼠标（纯视觉层）", () => {
-    const { ov } = buildEditor()
-    expect(ov.getAttribute("contenteditable")).toBe("false")
+    expect(ov.style.position).toBe("absolute")
     expect(ov.style.pointerEvents).toBe("none")
     document.body.innerHTML = ""
   })
