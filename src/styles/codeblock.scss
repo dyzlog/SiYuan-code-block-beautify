@@ -399,3 +399,12 @@
 .code-block.cb-beautified.protyle-wysiwyg--select::after {
   content: none !important;
 }
+
+/* 默认主题兼容：思源原生工具栏（语言标记/复制/更多）默认在代码块左上角，
+   与主题装饰栏左侧圆点重叠。移到右侧，挨着装饰栏末尾（右侧预留区）。
+   Asri 等主题已在右侧，本规则 right:0 与其一致，无副作用。 */
+.code-block.cb-beautified .protyle-action {
+  left: auto !important;
+  right: 0 !important;
+  direction: rtl;
+}
