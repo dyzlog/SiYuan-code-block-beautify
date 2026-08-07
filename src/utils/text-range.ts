@@ -21,12 +21,6 @@ export function getLineStarts(text: string): number[] {
   return starts
 }
 
-/**
- * 节点级行切分已移除（代码内折叠功能已删除）。
- * 以下保留：countVisibleLines / getLineStarts / makeRange（供长代码折叠、
- * 当前行高亮、代码统计等共用）。
- */
-
 /** 定位文本偏移所在的文本节点 */
 function locateTextOffset(root: Node, target: number): { node: Text, offset: number } {
   let acc = 0

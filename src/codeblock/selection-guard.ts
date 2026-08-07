@@ -19,8 +19,10 @@ import {
 
 /** 当前是否从 .hljs 文本开始拖选 */
 let draggingCodeText = false
-/** document mouseup 监听是否已绑定（只绑定一次） */
-let installed = false
+/** document mouseup 监听函数引用（供卸载时移除） */
+let onDocMouseUp: (() => void) | null = null
+/** 已绑定 mousedown 监听的 .hljs（防重复增强累积监听） */
+const boundHljs = new WeakSet<HTMLElement>()
 
 /** 清理思源块选中标记（若存在），保留原生 selection */
 function clearBlockSelect() {
@@ -42,25 +44,29 @@ function clearBlockSelect() {
   })
 }
 
-/** document 级 mouseup：拖选代码文本后清理块选中（只绑定一次） */
+/** 安装 document 级 mouseup（只绑定一次；插件卸载时通过 destroySelectionGuard 移除） */
 function installDocumentMouseUp() {
-  if (installed) {
+  if (onDocMouseUp) {
     return
   }
-  installed = true
-  document.addEventListener("mouseup", () => {
+  onDocMouseUp = () => {
     if (!draggingCodeText) {
       return
     }
     draggingCodeText = false
     // setTimeout(0) 在事件循环末尾执行，确保思源的块选中逻辑已运行
     setTimeout(clearBlockSelect, 0)
-  })
+  }
+  document.addEventListener("mouseup", onDocMouseUp)
 }
 
-/** 初始化：给代码块 .hljs 绑定 mousedown（标记拖选起点） */
+/** 初始化：给代码块 .hljs 绑定 mousedown（标记拖选起点，防重复） */
 function initSelectionGuard(hljs: HTMLElement) {
   installDocumentMouseUp()
+  if (boundHljs.has(hljs)) {
+    return
+  }
+  boundHljs.add(hljs)
   hljs.addEventListener("mousedown", (e: MouseEvent) => {
     if (e.button === 0) {
       draggingCodeText = true
@@ -68,14 +74,25 @@ function initSelectionGuard(hljs: HTMLElement) {
   })
 }
 
+/** 卸载：移除 document 监听、重置状态 */
+function destroySelectionGuard() {
+  if (onDocMouseUp) {
+    document.removeEventListener("mouseup", onDocMouseUp)
+    onDocMouseUp = null
+  }
+  draggingCodeText = false
+}
+
+// 本模块不注入 DOM（只挂事件监听）→ selfSelector 用 ""，不纳入 getSelfSelectors()，
+// 避免思源 MO 把「用户编辑代码（.hljs 内部变化）」误认为插件自身注入而跳过扫描
 registerDecor({
-  selfSelector: ".hljs",
+  selfSelector: "",
   enhance: (ctx) => {
     if (ctx.hljs) {
       initSelectionGuard(ctx.hljs)
     }
   },
   cleanup: () => {
-    draggingCodeText = false
+    destroySelectionGuard()
   },
 })

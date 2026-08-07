@@ -81,6 +81,17 @@ interface OverlayGeom {
   scrollerRect: DOMRect | null
 }
 
+/** 块是否在滚动容器可视区（滚动裁剪判定，两处共用） */
+function isBlockVisible(g: OverlayGeom): boolean {
+  if (!g.scrollerRect) {
+    return true
+  }
+  return g.blockRect.bottom > g.scrollerRect.top
+    && g.blockRect.top < g.scrollerRect.bottom
+    && g.blockRect.right > g.scrollerRect.left
+    && g.blockRect.left < g.scrollerRect.right
+}
+
 function readGeom(codeBlock: HTMLElement): OverlayGeom {
   const scroller = scrollerMap.get(codeBlock)
   return {
@@ -96,7 +107,7 @@ function setStyle(el: HTMLElement, prop: "left" | "top" | "width" | "height" | "
   }
 }
 
-function applyGeom(codeBlock: HTMLElement, ov: HTMLElement, g: OverlayGeom) {
+function applyGeom(ov: HTMLElement, g: OverlayGeom) {
   const {
     blockRect,
     scrollerRect,
@@ -104,17 +115,10 @@ function applyGeom(codeBlock: HTMLElement, ov: HTMLElement, g: OverlayGeom) {
   // 位置：overlay 锚定 .protyle-wysiwyg（滚动内容），transform 表达
   // codeBlock 相对锚定容器的偏移——滚动时该偏移不变（overlay 与 codeBlock
   // 一起随内容原生移动），transform 无需更新 → 零浮动零计算。
-  const offset = staticOffsets.get(ov)
-  let x = 0
-  let y = 0
-  if (offset) {
-    x = offset.left
-    y = offset.top
-  } else {
-    // 无缓存（理论上 getOverlay 创建时必缓存）：退化为相对父容器
-    x = codeBlock.offsetLeft - ov.offsetLeft
-    y = codeBlock.offsetTop - ov.offsetTop
-  }
+  // （getOverlay 创建时必写 staticOffsets，此处恒有值，无 fallback 分支）
+  const offset = staticOffsets.get(ov)!
+  const x = offset.left
+  const y = offset.top
   const t = `translate(${x}px, ${y}px)`
   if (ov.style.transform !== t) {
     ov.style.transform = t
@@ -128,11 +132,7 @@ function applyGeom(codeBlock: HTMLElement, ov: HTMLElement, g: OverlayGeom) {
     setStyle(ov, "visibility", "")
     return
   }
-  const visible = blockRect.bottom > scrollerRect.top
-    && blockRect.top < scrollerRect.bottom
-    && blockRect.right > scrollerRect.left
-    && blockRect.left < scrollerRect.right
-  if (!visible) {
+  if (!isBlockVisible(g)) {
     // 完全滚出视口：隐藏且不再写位置（不可见，位置无意义）
     setStyle(ov, "visibility", "hidden")
     return
@@ -183,7 +183,7 @@ function syncOverlay(codeBlock: HTMLElement, ov: HTMLElement) {
       top: blockRect.top - parentRect.top,
     })
   }
-  applyGeom(codeBlock, ov, readGeom(codeBlock))
+  applyGeom(ov, readGeom(codeBlock))
 }
 
 let scrollInstalled = false
@@ -229,7 +229,7 @@ export function destroyOverlaySystem() {
  * 活跃块 = 已增强块（仅用户滚动经过的），长文档滚动不会全量回流。
  */
 function onScroll() {
-  const jobs: Array<[HTMLElement, HTMLElement, OverlayGeom]> = []
+  const jobs: Array<[HTMLElement, OverlayGeom]> = []
   const farAway: Array<[HTMLElement, HTMLElement]> = []
   // 阶段 1：批量读真实几何（一次回流）
   for (const cb of activeBlocks) {
@@ -238,21 +238,15 @@ function onScroll() {
       continue
     }
     const g = readGeom(cb)
-    const visible = g.scrollerRect
-      ? g.blockRect.bottom > g.scrollerRect.top
-      && g.blockRect.top < g.scrollerRect.bottom
-      && g.blockRect.right > g.scrollerRect.left
-      && g.blockRect.left < g.scrollerRect.right
-      : true
-    if (visible) {
-      jobs.push([cb, ov, g])
+    if (isBlockVisible(g)) {
+      jobs.push([ov, g])
     } else {
       farAway.push([cb, ov])
     }
   }
   // 阶段 2：批量写（可见块定位 + 不可见块隐藏，避免残留在上次位置）
-  for (const [cb, ov, g] of jobs) {
-    applyGeom(cb, ov, g)
+  for (const [ov, g] of jobs) {
+    applyGeom(ov, g)
   }
   for (const [, ov] of farAway) {
     setStyle(ov, "visibility", "hidden")

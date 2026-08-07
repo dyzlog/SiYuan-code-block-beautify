@@ -2,7 +2,7 @@
  * 当前行高亮：跟随输入光标（caret）。
  * 光标在代码块内（点击 / 键盘移动 / 输入）→ 高亮光标所在行；
  * 光标移出（失焦 / selection 离开）→ 移除。
- * rAF 节流：高频事件（selectionchange 等）每帧最多处理一次，保证流畅。
+ * rAF 节流：高频事件（focusin/keydown/input 等）每帧最多处理一次，保证流畅。
  */
 import {
   caretLine,

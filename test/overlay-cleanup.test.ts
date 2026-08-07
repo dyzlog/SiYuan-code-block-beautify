@@ -67,8 +67,6 @@ if (typeof HTMLElement.prototype.checkVisibility !== "function") {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
-console.log("[probe] typeof Node:", typeof Node, "typeof window.Node:", typeof window.Node, "typeof globalThis.Node:", typeof globalThis.Node)
-
 describe("代码块被移除时 overlay 清理（思源动态加载场景）", () => {
   it("codeBlock 从 DOM 移除后，兄弟 overlay 应一并清理，不残留", async () => {
     const plugin = {
