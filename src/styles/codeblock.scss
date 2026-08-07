@@ -92,9 +92,6 @@
   height: 24px;
   z-index: 3;
   pointer-events: none;
-  /* flex：装饰（圆点/符号）在左，收起按钮（margin-left:auto）在右 */
-  display: flex;
-  align-items: center;
   /* 背景透明：圆角同步外观设置（顶部两角跟随代码块圆角） */
   background-color: transparent;
   border-radius: var(--cb-radius, 8px) var(--cb-radius, 8px) 0 0;
@@ -225,23 +222,30 @@
 }
 
 /* 底部「收起/展开」按钮 */
-/* 长代码「收起/展开」按钮：位于顶部装饰栏 bar 内（右侧），不覆盖代码文本区，
-   拖选多行不会命中按钮，杜绝 selection 边界干扰。 */
 .cb-longcode-btn {
-  pointer-events: auto;
-  margin-left: auto;
-  margin-right: 6px;
-  padding: 1px 10px;
-  font-size: 11px;
-  line-height: 16px;
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  /* 默认不拦截鼠标（拖选多行经过按钮区时，思源 elementFromPoint 会命中按钮
+     而非代码文本 → 误判「拖出代码块」→ 块选中）。仅悬停在按钮上时可点击。 */
+  pointer-events: none;
+  padding: 2px 16px;
+  font-size: 12px;
+  line-height: 18px;
   border: 1px solid var(--b3-border-color);
-  border-radius: 10px;
+  border-radius: 12px;
   background-color: var(--b3-theme-background);
   color: var(--b3-theme-on-surface);
   cursor: pointer;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   transition: opacity 0.2s;
-  white-space: nowrap;
+
+  /* 悬停代码块时恢复可点击（此时用户意图是操作按钮，不是拖选） */
+  .code-block:hover & {
+    pointer-events: auto;
+  }
 
   &:hover {
     background-color: var(--b3-theme-background-light);
@@ -395,17 +399,4 @@
 
 .cb-setting__reset {
   margin-right: auto;
-}
-
-/* 拖选覆盖：思源拖选代码文本时会给代码块临时加 .protyle-wysiwyg--select（块选中
-   高亮闪烁）。这是思源选择过程的正常标记，不能移除 class（会破坏多行选择）——
-   只做 CSS 视觉覆盖：代码块上的选中高亮不显示，但思源内部逻辑不受影响。 */
-.code-block.cb-beautified.protyle-wysiwyg--select {
-  box-shadow: none !important;
-  outline: none !important;
-  filter: none !important;
-}
-
-.code-block.cb-beautified.protyle-wysiwyg--select::after {
-  content: none !important;
 }

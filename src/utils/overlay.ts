@@ -280,11 +280,7 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
   if (!ov || !ov.isConnected) {
     ov = document.createElement("div")
     ov.className = "cb-overlay"
-    // overlay 必须完全透明于 selection 系统：
-    // - 不加 contenteditable="false"（不可编辑区域是浏览器 selection 边界，
-    //   拖选越出 .hljs 时 selection 被强制收缩/重定位 → 思源块级选中）
-    // - 不加 user-select: none（同样制造「不可选边界」）
-    // 只靠 pointer-events: none 隔离鼠标交互；装饰元素纯视觉层。
+    ov.setAttribute("contenteditable", "false")
     ov.style.position = "absolute"
     ov.style.left = "0"
     ov.style.top = "0"

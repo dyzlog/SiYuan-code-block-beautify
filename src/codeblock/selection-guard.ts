@@ -17,6 +17,13 @@ import {
   registerDecor,
 } from "./registry"
 
+/** 当前是否从 .hljs 文本开始拖选 */
+let draggingCodeText = false
+/** document mouseup 监听函数引用（供卸载时移除） */
+let onDocMouseUp: (() => void) | null = null
+/** 已绑定 mousedown 监听的 .hljs（防重复增强累积监听） */
+const boundHljs = new WeakSet<HTMLElement>()
+
 const DEBUG_MOUSE_LOG = Boolean((window as any).__CB_MOUSE_DEBUG)
 const DEBUG_SELECTION_GUARD = Boolean((window as any).__CB_SELECTION_GUARD_DEBUG || DEBUG_MOUSE_LOG)
 
@@ -72,6 +79,27 @@ function getClosestHljs(node: Node | null): HTMLElement | null {
     return (node as Element).closest(".hljs") as HTMLElement | null
   }
   return node.parentElement?.closest(".hljs") as HTMLElement | null
+}
+
+function resolveSelectionHljs(selection: Selection | null): HTMLElement | null {
+  if (!selection || selection.rangeCount === 0) {
+    return null
+  }
+  for (let i = 0; i < selection.rangeCount; i += 1) {
+    const range = selection.getRangeAt(i)
+    const nodes = [
+      range.startContainer,
+      range.endContainer,
+      range.commonAncestorContainer,
+    ]
+    for (const node of nodes) {
+      const hljs = getClosestHljs(node)
+      if (hljs) {
+        return hljs
+      }
+    }
+  }
+  return null
 }
 
 function getRangeMeta(range: Range, hljs: HTMLElement | null) {
@@ -334,6 +362,35 @@ function getNodePath(node: Node | null, limit = 8): string {
   return parts.join(" > ")
 }
 
+function debugSelectionState(prefix: string, selection: Selection | null, hljs: HTMLElement | null) {
+  if (!DEBUG_SELECTION_GUARD) {
+    return
+  }
+  const selText = selection?.toString() ?? ""
+  const rangeCount = selection?.rangeCount ?? 0
+  console.groupCollapsed(`[selection-guard] ${prefix}`)
+  console.log(`selection text: %c${selText}`, "font-weight: bold; color: navy;")
+  console.log("isCollapsed:", selection?.isCollapsed)
+  console.log("rangeCount:", rangeCount)
+  console.log("hljs:", hljs)
+  for (let i = 0; i < rangeCount; i += 1) {
+    const range = selection!.getRangeAt(i)
+    console.group(`range ${i}`)
+    console.log("startContainer:", getNodeDescriptor(range.startContainer), getNodePath(range.startContainer))
+    console.log("startOffset:", range.startOffset)
+    console.log("endContainer:", getNodeDescriptor(range.endContainer), getNodePath(range.endContainer))
+    console.log("endOffset:", range.endOffset)
+    console.log("commonAncestor:", getNodeDescriptor(range.commonAncestorContainer), getNodePath(range.commonAncestorContainer))
+    console.log("startInCode:", isNodeInCodeBlock(range.startContainer, hljs))
+    console.log("endInCode:", isNodeInCodeBlock(range.endContainer, hljs))
+    console.log("ancestorInCode:", isNodeInCodeBlock(range.commonAncestorContainer, hljs))
+    console.groupEnd()
+  }
+  const blockSelectEls = document.querySelectorAll<HTMLElement>(".protyle-wysiwyg--select")
+  console.log("block-select elements:", blockSelectEls.length, blockSelectEls)
+  console.groupEnd()
+}
+
 function isNodeInCodeBlock(node: Node | null, hljs: HTMLElement | null): boolean {
   if (!node || !hljs) {
     return false
@@ -371,27 +428,129 @@ export function shouldClearBlockSelect(selection: Selection | null, hljs: HTMLEl
   return false
 }
 
-/**
- * 选择保护——已降级为「纯 CSS 视觉覆盖」模式：
- *
- * 历史：尝试过 JS 干预（拖选期间/结束时移除 .protyle-wysiwyg--select 标记），
- * 实测都会破坏思源的原生多行文本选择（选中失败/选中被取消）。
- * 结论：protyle-wysiwyg--select 是思源拖选代码文本的正常内部标记，不能动。
- *
- * 当前方案：零 JS 干预。拖选时的「块选中高亮闪烁」由 scss 里的
- * `.code-block.cb-beautified.protyle-wysiwyg--select` 规则做视觉覆盖
- * （box-shadow/outline/filter/::after 置空），思源内部逻辑完全不受影响。
- */
+/** 清理思源块选中标记（若存在），保留原生 selection */
+function clearBlockSelect() {
+  const sel = window.getSelection()
+  const hljs = resolveSelectionHljs(sel)
+  debugSelectionState("clearBlockSelect start", sel, hljs)
+  if (!shouldClearBlockSelect(sel, hljs)) {
+    debugSelectionState("clearBlockSelect skipped", sel, hljs)
+    return
+  }
+  // 移除思源块选中标记（视觉上恢复「选中文本」而非「选中整个块」）
+  document.querySelectorAll<HTMLElement>(".protyle-wysiwyg--select").forEach((el) => {
+    el.classList.remove("protyle-wysiwyg--select")
+  })
+  debugSelectionState("clearBlockSelect after clear", sel, hljs)
+}
 
-// 本模块不注入 DOM 也不挂事件监听 → selfSelector 用 ""，不纳入 getSelfSelectors()，
+/**
+ * 实时清理：拖选期间（思源在 selectionchange 中就加 protyle-wysiwyg--select，
+ * 见日志 blockSelectCount=2），不等 mouseup——每次 selectionchange 检测到
+ * 「代码块内选区 + 块选中标记」立即移除。
+ */
+let realtimeClearInstalled = false
+
+function installRealtimeClear() {
+  if (realtimeClearInstalled) {
+    return
+  }
+  realtimeClearInstalled = true
+  document.addEventListener("selectionchange", () => {
+    if (!realtimeClearInstalled || !draggingCodeText) {
+      // 仅处理「从代码文本开始拖选」的实时清理；
+      // 非拖选（点击块标/编辑选中）不动思源原生块选中
+      return
+    }
+    const sel = window.getSelection()
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+      return
+    }
+    // 选区必须落在代码块内（否则不动思源的其它块选中）
+    const hljs = resolveSelectionHljs(sel)
+    if (!hljs || !shouldClearBlockSelect(sel, hljs)) {
+      return
+    }
+    // 检测到块选中标记就立即移除（思源拖选中持续添加）
+    const marked = document.querySelectorAll<HTMLElement>(".protyle-wysiwyg--select")
+    if (marked.length > 0) {
+      marked.forEach((el) => el.classList.remove("protyle-wysiwyg--select"))
+      if (DEBUG_SELECTION_GUARD) {
+        console.log("[selection-guard] realtime clear", marked.length, "block-select marks")
+      }
+    }
+  })
+}
+
+/** 安装 document 级 mouseup（只绑定一次；插件卸载时通过 destroySelectionGuard 移除） */
+function installDocumentMouseUp() {
+  if (onDocMouseUp) {
+    return
+  }
+  onDocMouseUp = () => {
+    if (!draggingCodeText) {
+      return
+    }
+    draggingCodeText = false
+    if (DEBUG_SELECTION_GUARD) {
+      console.log("[selection-guard] document mouseup, schedule clearBlockSelect")
+    }
+    // 多重清理：思源可能在 mouseup 后异步重新加 protyle-wysiwyg--select，
+    // 日志显示 blockSelectCount=2 在 mouseup 后仍存在——多时间点各清一次
+    setTimeout(clearBlockSelect, 0)
+    setTimeout(clearBlockSelect, 30)
+    setTimeout(clearBlockSelect, 120)
+  }
+  document.addEventListener("mouseup", onDocMouseUp)
+}
+
+/** 初始化：给代码块 .hljs 绑定 mousedown（标记拖选起点，防重复） */
+function initSelectionGuard(hljs: HTMLElement) {
+  installDocumentMouseUp()
+  installRealtimeClear()
+  if (boundHljs.has(hljs)) {
+    return
+  }
+  boundHljs.add(hljs)
+  hljs.addEventListener("mousedown", (e: MouseEvent) => {
+    if (e.button === 0) {
+      draggingCodeText = true
+      if (DEBUG_SELECTION_GUARD) {
+        console.log("[selection-guard] mousedown on .hljs", {
+          target: e.target,
+          button: e.button,
+          hljs,
+          path: getNodePath(e.target as Node),
+        })
+      }
+    }
+  })
+}
+
+/** 卸载：移除 document 监听、重置状态 */
+function destroySelectionGuard() {
+  if (onDocMouseUp) {
+    document.removeEventListener("mouseup", onDocMouseUp)
+    onDocMouseUp = null
+  }
+  if (realtimeClearInstalled) {
+    // 注意：selectionchange 是匿名函数，无法单独移除。
+    // 用标志位让回调失效（插件卸载后不再清理，避免影响思源原生块选中）
+    realtimeClearInstalled = false
+  }
+  draggingCodeText = false
+}
+
+// 本模块不注入 DOM（只挂事件监听）→ selfSelector 用 ""，不纳入 getSelfSelectors()，
 // 避免思源 MO 把「用户编辑代码（.hljs 内部变化）」误认为插件自身注入而跳过扫描
 registerDecor({
   selfSelector: "",
-  enhance: () => {
-    // 空实现：选择保护已降级为纯 CSS（见 codeblock.scss 的
-    // .code-block.cb-beautified.protyle-wysiwyg--select 覆盖规则）
+  enhance: (ctx) => {
+    if (ctx.hljs) {
+      initSelectionGuard(ctx.hljs)
+    }
   },
   cleanup: () => {
-    // 无 JS 监听需要清理
+    destroySelectionGuard()
   },
 })

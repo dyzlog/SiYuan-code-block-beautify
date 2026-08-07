@@ -230,8 +230,6 @@ function renderLongCodeBar(
     return
   }
   const bar = ensureThemeBar(codeBlock)
-  // 按钮长代码常驻（未折叠=「收起」，折叠后=「展开」），放在顶部装饰栏 bar 内
-  // （bar 不覆盖代码文本区，拖选多行不会命中按钮，杜绝 selection 边界干扰）
   let btn = bar.querySelector<HTMLButtonElement>(`.${BTN_CLASS}`)
   if (!btn) {
     btn = document.createElement("button")
@@ -256,7 +254,7 @@ function renderLongCodeBar(
         centerBlockInViewport(codeBlock)
       }
     })
-    bar.appendChild(btn)
+    getOverlay(codeBlock).appendChild(btn)
   }
   // 恢复折叠状态（data 属性持久化），高度：同阈值用缓存，阈值变化自动调整
   const folded = wasFolded
