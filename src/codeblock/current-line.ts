@@ -123,25 +123,9 @@ function initCurrentLine(codeBlock: HTMLElement, hljs: HTMLElement, enabled: boo
   hljs.addEventListener("keyup", schedule, opts)
   hljs.addEventListener("click", schedule, opts)
   hljs.addEventListener("input", schedule, opts)
-  // selectionchange：全局选区变化驱动；但鼠标在代码块内悬停移动时思源可能触发
-  // selection 抖动，这里在鼠标移动后的短窗口内抑制，避免「鼠标移动带动高亮」
-  let lastMouseMoveAt = 0
-  hljs.addEventListener("mousemove", () => {
-    lastMouseMoveAt = Date.now()
-  }, opts)
-  document.addEventListener("selectionchange", () => {
-    if (Date.now() - lastMouseMoveAt < 200) {
-      return
-    }
-    // 用户正在选中文本（非折叠 selection）→ 跳过高亮更新：
-    // 此时修改 DOM 会干扰思源 selection 锚点，导致「选中两行触发整个代码块被选中」。
-    // 高亮只应跟随光标（折叠 selection）。
-    const sel = window.getSelection()
-    if (sel && !sel.isCollapsed) {
-      return
-    }
-    schedule()
-  }, opts)
+  // 注意：不监听 selectionchange——思源在 selection 更新期间若检测到空 selection
+  // 会触发「块级选中」（整个代码块高亮）。移除 selectionchange 可避免我们的高亮
+  // 逻辑干扰思源的选中流程；高亮完全由 click/focusin/keydown/input 驱动即可。
   // 光标彻底离开代码块 → 仅移除高亮（保留监听，光标回来继续跟随）
   hljs.addEventListener("focusout", () => {
     dirty = false
