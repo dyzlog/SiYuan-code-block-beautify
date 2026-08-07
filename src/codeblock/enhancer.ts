@@ -349,36 +349,46 @@ function enhance(codeBlock: HTMLElement) {
     hljs,
     settings,
   })
-  // 编辑结束（focusout）后重新增强：新建/编辑的代码块在编辑态可能未初始化
-  // （统计角标、收起按钮需编辑完成后刷新）。重置 cbEnhanced 后重新 enhance，
-  // 让统计与折叠按钮反映编辑后的内容。
-  // 注意：focusout 绑在 codeBlock 上（事件冒泡），而非 .hljs——思源编辑时
-  // 可能重建 .hljs 子元素，绑在其上会因元素替换而失效。
+  // 编辑后重新增强：思源编辑代码块会重建 .hljs（focusout 不冒泡到 codeBlock，
+  // 实测不触发）。改用 MutationObserver 观察 .hljs 内容变化——思源重渲染
+  // 完成后内容更新，防抖后重新增强（刷新统计与折叠按钮）。
   if (!codeBlock.dataset.cbEditRefresh) {
     codeBlock.dataset.cbEditRefresh = "1"
-    codeBlock.addEventListener("focusout", () => {
+    let editTimer = 0
+    const editMo = new MutationObserver(() => {
       const dbg = (window as any).__CB_DEBUG
       const id = codeBlock.getAttribute("data-node-id")
-      // 编辑结束立即刷新（不等待重启/重渲染）。
-      // 关键：思源退出编辑后是「异步」重渲染 .hljs——立即 enhance 会读到
-      // 旧/空内容（角标显示 1 行 1 字符）。延迟多次尝试，直到 .hljs 行数
-      // 稳定（思源重渲染完成）再重新增强。
-      const tryRefresh = (attempt: number) => {
-        const hljsNow = codeBlock.querySelector<HTMLElement>(".hljs")
-        const linesNow = hljsNow ? getCodeText(hljsNow).split("\n").length : 0
-        if (dbg) {
-          console.log(`[cb-debug] focusout id=${id} attempt=${attempt} lines_now=${linesNow}`)
-        }
-        // 行数 > 0 且非"1 行 1 字符"（编辑占位）→ 内容就绪，重新增强
-        const text = hljsNow ? getCodeText(hljsNow).trim() : ""
-        if (attempt >= 8 || (text.length > 1 && linesNow > 0)) {
+      const hljsNow = codeBlock.querySelector<HTMLElement>(".hljs")
+      const text = hljsNow ? getCodeText(hljsNow).trim() : ""
+      const linesNow = hljsNow ? getCodeText(hljsNow).split("\n").length : 0
+      if (dbg) {
+        console.log(`[cb-debug] mo-fired id=${id} lines=${linesNow} textLen=${text.length} enhanced=${codeBlock.dataset.cbEnhanced}`)
+      }
+      // 内容非占位（>1 字符且有行数）→ 内容就绪，防抖后重新增强
+      if (text.length > 1 && linesNow > 0) {
+        window.clearTimeout(editTimer)
+        editTimer = window.setTimeout(() => {
           delete codeBlock.dataset.cbEnhanced
           enhance(codeBlock)
-          return
-        }
-        window.setTimeout(() => tryRefresh(attempt + 1), 80)
+        }, 300)
       }
-      tryRefresh(0)
+    })
+    const observeHljs = () => {
+      const h = codeBlock.querySelector<HTMLElement>(".hljs")
+      if (h) {
+        editMo.observe(h, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+        })
+      }
+    }
+    observeHljs()
+    // .hljs 可能被思源重建（编辑/重渲染），重建后重新绑定观察
+    const rebuildMo = new MutationObserver(() => observeHljs())
+    rebuildMo.observe(codeBlock, {
+      childList: true,
+      subtree: true,
     })
   }
 }
