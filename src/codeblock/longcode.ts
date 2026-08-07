@@ -199,6 +199,21 @@ function ensureThemeBar(codeBlock: HTMLElement): HTMLElement {
     bar.setAttribute("contenteditable", "false")
     getOverlay(codeBlock).appendChild(bar)
   }
+  // 兼容思源原生语言标记位置：默认主题把 .protyle-action（语言/复制/更多）
+  // 放在代码块左上角，会与我们的主题栏重叠。测量其实际位置：
+  // 若在左侧（默认主题），bar 的 left 让位到语言标记右侧。
+  const action = codeBlock.querySelector<HTMLElement>(".protyle-action")
+  let leftInset = "0"
+  if (action && action.offsetParent) {
+    const blockRect = codeBlock.getBoundingClientRect()
+    const actionRect = action.getBoundingClientRect()
+    // 语言标记在代码块左半部分且垂直重叠顶部区域 → 默认主题布局
+    if (actionRect.left - blockRect.left < blockRect.width / 2 && actionRect.top < blockRect.top + 30) {
+      // 语言标记右侧 + 小间距作为 bar 起点（圆点/符号从该处开始）
+      leftInset = `${Math.max(0, actionRect.right - blockRect.left) + 8}px`
+    }
+  }
+  bar.style.left = leftInset
   ensureScrollFade(codeBlock)
   return bar
 }
