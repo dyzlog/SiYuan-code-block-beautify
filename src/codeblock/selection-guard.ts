@@ -437,6 +437,10 @@ function clearBlockSelect() {
     debugSelectionState("clearBlockSelect skipped", sel, hljs)
     return
   }
+  // 移除拖选覆盖 class（恢复思源原生块选中能力）
+  document.querySelectorAll<HTMLElement>(".cb-drag-selecting").forEach((el) => {
+    el.classList.remove("cb-drag-selecting")
+  })
   // 移除思源块选中标记（视觉上恢复「选中文本」而非「选中整个块」）
   document.querySelectorAll<HTMLElement>(".protyle-wysiwyg--select").forEach((el) => {
     el.classList.remove("protyle-wysiwyg--select")
@@ -445,9 +449,10 @@ function clearBlockSelect() {
 }
 
 /**
- * 实时清理：拖选期间（思源在 selectionchange 中就加 protyle-wysiwyg--select，
- * 见日志 blockSelectCount=2），不等 mouseup——每次 selectionchange 检测到
- * 「代码块内选区 + 块选中标记」立即移除。
+ * 拖选期间处理：
+ * 1. 给代码块加 .cb-drag-selecting（CSS 覆盖块选中视觉，避免闪烁——不加时
+ *    思源同帧又加标记，移除+重加=闪烁）
+ * 2. 移除思源块选中标记
  */
 let realtimeClearInstalled = false
 
@@ -470,6 +475,11 @@ function installRealtimeClear() {
     const hljs = resolveSelectionHljs(sel)
     if (!hljs || !shouldClearBlockSelect(sel, hljs)) {
       return
+    }
+    // 给代码块加拖选覆盖 class（CSS 盖掉块选中视觉，避免闪烁），再移除标记
+    const codeBlock = hljs.closest<HTMLElement>(".code-block")
+    if (codeBlock) {
+      codeBlock.classList.add("cb-drag-selecting")
     }
     // 检测到块选中标记就立即移除（思源拖选中持续添加）
     const marked = document.querySelectorAll<HTMLElement>(".protyle-wysiwyg--select")

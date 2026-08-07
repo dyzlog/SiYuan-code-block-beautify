@@ -230,6 +230,8 @@ function renderLongCodeBar(
     return
   }
   const bar = ensureThemeBar(codeBlock)
+  // 按钮长代码常驻（未折叠=「收起」，折叠后=「展开」），位置在代码块底部中央
+  // 小按钮范围，命中区小——拖选多行时鼠标大概率不经过，避免干扰思源判定
   let btn = bar.querySelector<HTMLButtonElement>(`.${BTN_CLASS}`)
   if (!btn) {
     btn = document.createElement("button")

@@ -267,17 +267,6 @@
         代码
       </div>
       <div class="cb-setting__item fn__flex">
-        <span class="cb-setting__label">显示代码行号</span>
-        <label class="fn__flex">
-          <input
-            v-model="form.showLineNumber"
-            type="checkbox"
-            class="b3-switch fn__flex-center"
-          >
-        </label>
-        <span class="cb-setting__hint">控制思源原生行号显示，保存后生效</span>
-      </div>
-      <div class="cb-setting__item fn__flex">
         <span class="cb-setting__label">代码字体</span>
         <select
           v-model="form.codeFontFamily"

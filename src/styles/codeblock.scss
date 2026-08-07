@@ -228,24 +228,20 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 3;
-  /* 默认不拦截鼠标（拖选多行经过按钮区时，思源 elementFromPoint 会命中按钮
-     而非代码文本 → 误判「拖出代码块」→ 块选中）。仅悬停在按钮上时可点击。 */
-  pointer-events: none;
-  padding: 2px 16px;
-  font-size: 12px;
-  line-height: 18px;
+  /* 按钮必须可点（长代码收起/展开）。命中区即按钮本身——小按钮范围，
+     拖选多行时鼠标大概率不经过，不影响思源对代码文本的拖选判定。
+     overlay 是 .code-block 的兄弟节点，按钮只在其自身区域内响应。 */
+  pointer-events: auto;
+  padding: 1px 10px;
+  font-size: 11px;
+  line-height: 16px;
   border: 1px solid var(--b3-border-color);
-  border-radius: 12px;
+  border-radius: 10px;
   background-color: var(--b3-theme-background);
   color: var(--b3-theme-on-surface);
   cursor: pointer;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   transition: opacity 0.2s;
-
-  /* 悬停代码块时恢复可点击（此时用户意图是操作按钮，不是拖选） */
-  .code-block:hover & {
-    pointer-events: auto;
-  }
 
   &:hover {
     background-color: var(--b3-theme-background-light);
@@ -399,4 +395,22 @@
 
 .cb-setting__reset {
   margin-right: auto;
+}
+
+/* 拖选覆盖：插件在拖选期间给代码块加 .cb-drag-selecting，盖掉思源块选中视觉，
+   避免「移除标记 → 思源同帧重加」导致的闪烁。仅覆盖视觉，不动思源标记逻辑。 */
+.code-block.cb-beautified.cb-drag-selecting,
+.code-block.cb-beautified.cb-drag-selecting.protyle-wysiwyg--select {
+  background-color: var(--b3-theme-background) !important;
+  box-shadow: none !important;
+}
+
+/* 拖选期间思源可能给 .protyle-wysiwyg 容器也加块选中标记（::after 高亮）——
+   一并盖掉，确保拖选全程零闪烁 */
+.cb-drag-selecting .protyle-wysiwyg--select::after,
+.code-block.cb-drag-selecting.protyle-wysiwyg--select::after {
+  content: none !important;
+}
+.cb-drag-selecting .protyle-wysiwyg--select {
+  background: transparent !important;
 }
