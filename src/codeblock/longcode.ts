@@ -269,8 +269,8 @@ function renderLongCodeBar(
   // 恢复折叠状态（data 属性持久化），高度：同阈值用缓存，阈值变化自动调整
   const height = resolveFoldHeight(codeBlock, threshold, topNHeight)
   applyFold(codeBlock, wasFolded, wasFolded ? height : 0)
-  if (isDefaultTheme()) {
-    // 默认主题：隐藏装饰栏（与原生语言标记左上角重叠），仅保留收起/展开按钮
+  // 装饰栏隐藏条件：默认主题（与语言标记重叠）或主题风格关闭
+  if (isDefaultTheme() || !themeStyle) {
     bar.style.display = "none"
   } else {
     bar.style.display = ""
@@ -317,9 +317,8 @@ function isDefaultTheme(): boolean {
 
 /**
  * 长代码条整体调度（代码块增强时调用一次，内部策略自管）：
- * - 主题栏开关关闭 → 完整清理
- * - 短代码（≤阈值或折叠关闭）→ 默认主题清理 / 其它主题渲染装饰栏
- * - 长代码 → 收起按钮 + 折叠态（默认主题下装饰栏隐藏，仅按钮）
+ * - 长代码 + 折叠开启 → 收起按钮 + 折叠态（装饰栏是否显示取决于主题风格开关与当前主题）
+ * - 短代码 → 主题风格开启时渲染装饰栏（默认主题不显示，避免与语言标记重叠），否则清理
  */
 function renderLongCodeSection(
   codeBlock: HTMLElement,
@@ -328,34 +327,31 @@ function renderLongCodeSection(
   text: string,
 ) {
   const showTheme = settings.themeStyleEnabled && settings.themeStyle
-  if (!showTheme) {
-    clearLongCodeBar(codeBlock)
-    return
-  }
   const defaultTheme = isDefaultTheme()
-  const isLong = settings.longCodeFold && countVisibleLines(text) > settings.longCodeThreshold
-  if (!isLong) {
-    // 短代码：默认主题下不显示装饰栏（原生语言标记左上角会重叠），其它主题正常渲染
-    if (defaultTheme) {
-      clearLongCodeBar(codeBlock)
-    } else {
-      renderThemeBar(codeBlock, settings.themeStyle)
-    }
+  const lineCount = countVisibleLines(text)
+  const isLong = settings.longCodeFold && lineCount > settings.longCodeThreshold
+  // 长代码折叠独立于主题风格：即使主题风格关闭，折叠按钮仍应可用（issue #1）
+  if (isLong) {
+    // 只测量阈值行（第 n 行）的顶部与高度，用于收起高度
+    const n = settings.longCodeThreshold
+    const {
+      top,
+      height,
+    } = measureLineAt(hljs, text, Math.min(n, lineCount) - 1)
+    const hljsStyle = getComputedStyle(hljs)
+    const padBottom = Number.parseFloat(hljsStyle.paddingBottom) || 0
+    const borderV = (Number.parseFloat(hljsStyle.borderTopWidth) || 0)
+      + (Number.parseFloat(hljsStyle.borderBottomWidth) || 0)
+    const topNHeight = top > 0 ? top + height + padBottom + borderV : 0
+    renderLongCodeBar(codeBlock, lineCount, n, topNHeight, showTheme ? settings.themeStyle : "")
     return
   }
-  // 只测量阈值行（第 n 行）的顶部与高度，用于收起高度
-  const n = settings.longCodeThreshold
-  const lineCount = countVisibleLines(text)
-  const {
-    top,
-    height,
-  } = measureLineAt(hljs, text, Math.min(n, lineCount) - 1)
-  const hljsStyle = getComputedStyle(hljs)
-  const padBottom = Number.parseFloat(hljsStyle.paddingBottom) || 0
-  const borderV = (Number.parseFloat(hljsStyle.borderTopWidth) || 0)
-    + (Number.parseFloat(hljsStyle.borderBottomWidth) || 0)
-  const topNHeight = top > 0 ? top + height + padBottom + borderV : 0
-  renderLongCodeBar(codeBlock, lineCount, n, topNHeight, settings.themeStyle)
+  // 短代码：主题风格关闭或默认主题 → 清理装饰栏；否则渲染装饰栏
+  if (!showTheme || defaultTheme) {
+    clearLongCodeBar(codeBlock)
+  } else {
+    renderThemeBar(codeBlock, settings.themeStyle)
+  }
 }
 
 registerDecor({
