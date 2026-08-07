@@ -93,6 +93,12 @@ function initCurrentLine(codeBlock: HTMLElement, hljs: HTMLElement, enabled: boo
       return
     }
     dirty = false
+    // 拖选期间（selection 非折叠）跳过 DOM 写：mousedown→focusin→schedule→rAF 执行时
+    // 若用户正在拖动选择，写入高亮 div 会干扰思源 selection 建立 → 触发块级选中
+    const sel = window.getSelection()
+    if (sel && !sel.isCollapsed) {
+      return
+    }
     const line = caretLine(hljs)
     if (line < 0) {
       // 输入光标消失 → 仅移除高亮（保留监听）
