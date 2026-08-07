@@ -165,8 +165,13 @@ const fadeInstalled = new WeakSet<HTMLElement>()
 
 /**
  * 安装滚动虚化：滚动 .hljs 时主题栏与按钮同时虚化，停止 300ms 后恢复。
- * 幂等（WeakSet 防重复），每次长代码/主题栏渲染时调用，确保按钮创建后也生效。
+ * 幂等（WeakSet 防重复 + AbortController 清理），每次长代码/主题栏渲染时调用，
+ * 确保按钮创建后也生效。clearLongCodeBar 时 abort 解除监听，杜绝重建累积。
  */
+const fadeControllers = new WeakMap<HTMLElement, AbortController>()
+/** 收起按钮 click 委托的控制器（btn 重建时 abort 旧委托，杜绝累积） */
+const clickControllers = new WeakMap<HTMLElement, AbortController>()
+
 function ensureScrollFade(codeBlock: HTMLElement) {
   if (fadeInstalled.has(codeBlock)) {
     return
@@ -176,6 +181,8 @@ function ensureScrollFade(codeBlock: HTMLElement) {
     return
   }
   fadeInstalled.add(codeBlock)
+  const ac = new AbortController()
+  fadeControllers.set(codeBlock, ac)
   let fadeTimer = 0
   hljs.addEventListener("scroll", () => {
     const ov = getOverlay(codeBlock)
@@ -188,7 +195,7 @@ function ensureScrollFade(codeBlock: HTMLElement) {
       bar?.classList.remove(BAR_SCROLLING_CLASS)
       b?.classList.remove(BTN_SCROLLING_CLASS)
     }, 300)
-  })
+  }, { signal: ac.signal })
 }
 
 function ensureThemeBar(codeBlock: HTMLElement): HTMLElement {
@@ -255,7 +262,11 @@ function renderLongCodeBar(
       }
     }
     // 委托：仅当点击坐标命中按钮矩形时触发（click 冒泡自 codeBlock，
-    // 不影响思源对代码块的其它点击处理）
+    // 不影响思源对代码块的其它点击处理）。
+    // 用 AbortController 管理：btn 重建/清理时 abort 旧委托，杜绝累积
+    clickControllers.get(codeBlock)?.abort()
+    const clickAc = new AbortController()
+    clickControllers.set(codeBlock, clickAc)
     codeBlock.addEventListener("click", (e: MouseEvent) => {
       const rect = btn?.getBoundingClientRect()
       if (rect && e.clientX >= rect.left && e.clientX <= rect.right
@@ -264,7 +275,7 @@ function renderLongCodeBar(
         e.stopPropagation()
         toggle()
       }
-    })
+    }, { signal: clickAc.signal })
     getOverlay(codeBlock).appendChild(btn)
   }
   // 恢复折叠状态（data 属性持久化），高度：同阈值用缓存，阈值变化自动调整
@@ -283,6 +294,10 @@ function renderLongCodeBar(
 /** 完整清理长代码折叠（卸载时调用，恢复完整显示并清除状态） */
 function clearLongCodeBar(codeBlock: HTMLElement) {
   fadeInstalled.delete(codeBlock)
+  fadeControllers.get(codeBlock)?.abort()
+  fadeControllers.delete(codeBlock)
+  clickControllers.get(codeBlock)?.abort()
+  clickControllers.delete(codeBlock)
   const ov = getOverlay(codeBlock)
   ov.querySelector(`.${BAR_CLASS}`)?.remove()
   ov.querySelector(`.${BTN_CLASS}`)?.remove()
