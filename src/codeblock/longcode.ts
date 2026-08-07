@@ -43,12 +43,8 @@ function applyFold(codeBlock: HTMLElement, folded: boolean, topNHeight: number) 
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
   // 只给 .hljs 限高（内容溢出触发内部滚动预览），.code-block 不设 max-height，
   // 使其自适应 .hljs 实际高度，避免滚动到底时底部内容被外层裁剪
-  if (folded && topNHeight > 0) {
-    if (hljs) {
-      hljs.style.maxHeight = `${topNHeight}px`
-    }
-  } else if (hljs) {
-    hljs.style.maxHeight = ""
+  if (hljs) {
+    hljs.style.maxHeight = folded && topNHeight > 0 ? `${topNHeight}px` : ""
   }
 }
 
@@ -182,9 +178,10 @@ function ensureScrollFade(codeBlock: HTMLElement) {
   fadeInstalled.add(codeBlock)
   let fadeTimer = 0
   hljs.addEventListener("scroll", () => {
-    const bar = getOverlay(codeBlock).querySelector<HTMLElement>(`.${BAR_CLASS}`)
+    const ov = getOverlay(codeBlock)
+    const bar = ov.querySelector<HTMLElement>(`.${BAR_CLASS}`)
     bar?.classList.add(BAR_SCROLLING_CLASS)
-    const b = getOverlay(codeBlock).querySelector<HTMLElement>(`.${BTN_CLASS}`)
+    const b = ov.querySelector<HTMLElement>(`.${BTN_CLASS}`)
     b?.classList.add(BTN_SCROLLING_CLASS)
     window.clearTimeout(fadeTimer)
     fadeTimer = window.setTimeout(() => {
@@ -270,18 +267,18 @@ function renderLongCodeBar(
     getOverlay(codeBlock).appendChild(btn)
   }
   // 恢复折叠状态（data 属性持久化），高度：同阈值用缓存，阈值变化自动调整
-  const folded = wasFolded
   const height = resolveFoldHeight(codeBlock, threshold, topNHeight)
-  applyFold(codeBlock, folded, folded ? height : 0)
+  applyFold(codeBlock, wasFolded, wasFolded ? height : 0)
   renderThemeDecor(bar, themeStyle)
-  updateBtn(btn, folded)
+  updateBtn(btn, wasFolded)
 }
 
 /** 完整清理长代码折叠（卸载时调用，恢复完整显示并清除状态） */
 function clearLongCodeBar(codeBlock: HTMLElement) {
   fadeInstalled.delete(codeBlock)
-  getOverlay(codeBlock).querySelector(`.${BAR_CLASS}`)?.remove()
-  getOverlay(codeBlock).querySelector(`.${BTN_CLASS}`)?.remove()
+  const ov = getOverlay(codeBlock)
+  ov.querySelector(`.${BAR_CLASS}`)?.remove()
+  ov.querySelector(`.${BTN_CLASS}`)?.remove()
   applyFold(codeBlock, false, 0)
   delete codeBlock.dataset[FOLDED_ATTR]
   foldStates.delete(codeBlock)

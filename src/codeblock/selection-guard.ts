@@ -31,12 +31,10 @@ export function shouldClearBlockSelect(selection: Selection | null, hljs: HTMLEl
     return false
   }
   const inBlock = (node: Node | null): boolean => {
+    // 向上遍历父链：node 是 hljs 自身或其内部节点时必经过 hljs
     let current: Node | null = node
     while (current) {
       if (current === hljs) {
-        return true
-      }
-      if (current.nodeType === Node.ELEMENT_NODE && (current as Element).closest(".hljs") === hljs) {
         return true
       }
       current = current.parentNode

@@ -34,7 +34,8 @@ function initCodeStats(codeBlock: HTMLElement, enabled: boolean) {
     removeCodeStats(codeBlock)
     return
   }
-  let badge = getOverlay(codeBlock).querySelector<HTMLElement>(`.${STATS_CLASS}`)
+  const ov = getOverlay(codeBlock)
+  let badge = ov.querySelector<HTMLElement>(`.${STATS_CLASS}`)
   // 先解除旧监听（设置开关/重扫可能重复初始化）
   controllers.get(codeBlock)?.abort()
   const ac = new AbortController()
@@ -43,11 +44,11 @@ function initCodeStats(codeBlock: HTMLElement, enabled: boolean) {
     badge = document.createElement("div")
     badge.className = STATS_CLASS
     badge.setAttribute("contenteditable", "false")
-    getOverlay(codeBlock).appendChild(badge)
+    ov.appendChild(badge)
   }
   updateStats(codeBlock)
-  const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
-  hljs?.addEventListener("input", () => updateStats(codeBlock), { signal: ac.signal })
+  codeBlock.querySelector<HTMLElement>(".hljs")
+    ?.addEventListener("input", () => updateStats(codeBlock), { signal: ac.signal })
 }
 
 /** 移除统计角标并解除监听 */
