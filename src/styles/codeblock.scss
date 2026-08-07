@@ -398,19 +398,17 @@
 }
 
 /* 拖选覆盖：插件在拖选期间给代码块加 .cb-drag-selecting，盖掉思源块选中视觉，
-   避免「移除标记 → 思源同帧重加」导致的闪烁。仅覆盖视觉，不动思源标记逻辑。 */
-.code-block.cb-beautified.cb-drag-selecting,
+   避免「移除标记 → 思源同帧重加」导致的闪烁。仅覆盖视觉，不动思源标记逻辑。
+   注意：不覆盖代码块自身背景（用户自定义背景图/色保留），只盖「选中标记」
+   附加的高亮（主题对 .protyle-wysiwyg--select 的 ::after / box-shadow / outline）。 */
 .code-block.cb-beautified.cb-drag-selecting.protyle-wysiwyg--select {
-  background-color: var(--b3-theme-background) !important;
   box-shadow: none !important;
+  outline: none !important;
+  filter: none !important;
 }
 
-/* 拖选期间思源可能给 .protyle-wysiwyg 容器也加块选中标记（::after 高亮）——
-   一并盖掉，确保拖选全程零闪烁 */
-.cb-drag-selecting .protyle-wysiwyg--select::after,
-.code-block.cb-drag-selecting.protyle-wysiwyg--select::after {
+/* 盖掉选中标记的 ::after 高亮覆盖层（主题实现） */
+.code-block.cb-drag-selecting.protyle-wysiwyg--select::after,
+.code-block.cb-drag-selecting.protyle-wysiwyg--select *::after {
   content: none !important;
-}
-.cb-drag-selecting .protyle-wysiwyg--select {
-  background: transparent !important;
 }

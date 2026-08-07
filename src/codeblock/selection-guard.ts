@@ -17,8 +17,6 @@ import {
   registerDecor,
 } from "./registry"
 
-/** 当前是否从 .hljs 文本开始拖选 */
-let draggingCodeText = false
 /** document mouseup 监听函数引用（供卸载时移除） */
 let onDocMouseUp: (() => void) | null = null
 /** 已绑定 mousedown 监听的 .hljs（防重复增强累积监听） */
@@ -462,16 +460,17 @@ function installRealtimeClear() {
   }
   realtimeClearInstalled = true
   document.addEventListener("selectionchange", () => {
-    if (!realtimeClearInstalled || !draggingCodeText) {
-      // 仅处理「从代码文本开始拖选」的实时清理；
-      // 非拖选（点击块标/编辑选中）不动思源原生块选中
+    if (!realtimeClearInstalled) {
       return
     }
     const sel = window.getSelection()
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
       return
     }
-    // 选区必须落在代码块内（否则不动思源的其它块选中）
+    // 选区必须落在代码块内（否则不动思源的其它块选中）。
+    // 不依赖 draggingCodeText：用户可能从代码块上方段落拖入（思源框选逻辑
+    // 会给代码块临时加 protyle-wysiwyg--select 闪烁）——只要选区在代码块内
+    // 且有内容，就加覆盖 class + 清标记。
     const hljs = resolveSelectionHljs(sel)
     if (!hljs || !shouldClearBlockSelect(sel, hljs)) {
       return
@@ -498,15 +497,12 @@ function installDocumentMouseUp() {
     return
   }
   onDocMouseUp = () => {
-    if (!draggingCodeText) {
-      return
-    }
-    draggingCodeText = false
     if (DEBUG_SELECTION_GUARD) {
       console.log("[selection-guard] document mouseup, schedule clearBlockSelect")
     }
     // 多重清理：思源可能在 mouseup 后异步重新加 protyle-wysiwyg--select，
-    // 日志显示 blockSelectCount=2 在 mouseup 后仍存在——多时间点各清一次
+    // 日志显示 blockSelectCount=2 在 mouseup 后仍存在——多时间点各清一次。
+    // 不依赖 draggingCodeText（从块外拖入时为 false，但同样需要清理）。
     setTimeout(clearBlockSelect, 0)
     setTimeout(clearBlockSelect, 30)
     setTimeout(clearBlockSelect, 120)
@@ -523,16 +519,13 @@ function initSelectionGuard(hljs: HTMLElement) {
   }
   boundHljs.add(hljs)
   hljs.addEventListener("mousedown", (e: MouseEvent) => {
-    if (e.button === 0) {
-      draggingCodeText = true
-      if (DEBUG_SELECTION_GUARD) {
-        console.log("[selection-guard] mousedown on .hljs", {
-          target: e.target,
-          button: e.button,
-          hljs,
-          path: getNodePath(e.target as Node),
-        })
-      }
+    if (e.button === 0 && DEBUG_SELECTION_GUARD) {
+      console.log("[selection-guard] mousedown on .hljs", {
+        target: e.target,
+        button: e.button,
+        hljs,
+        path: getNodePath(e.target as Node),
+      })
     }
   })
 }
@@ -548,7 +541,6 @@ function destroySelectionGuard() {
     // 用标志位让回调失效（插件卸载后不再清理，避免影响思源原生块选中）
     realtimeClearInstalled = false
   }
-  draggingCodeText = false
 }
 
 // 本模块不注入 DOM（只挂事件监听）→ selfSelector 用 ""，不纳入 getSelfSelectors()，
