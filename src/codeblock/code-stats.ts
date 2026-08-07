@@ -67,9 +67,6 @@ registerDecor({
     codeBlock,
     settings,
   }) => {
-    if ((window as any).__CB_DEBUG) {
-      console.log("[cb-debug] code-stats enhance", codeBlock.dataset.cbEnhanced)
-    }
     initCodeStats(codeBlock, settings.codeStats)
   },
   cleanup: (codeBlock) => {

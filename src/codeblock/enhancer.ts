@@ -339,10 +339,6 @@ function enhance(codeBlock: HTMLElement) {
   // 应用边框样式 class（滚动刷新后新增强的块也带上当前边框样式）
   applyBorderStyleClass(codeBlock, settings.borderStyle)
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
-  if ((window as any).__CB_DEBUG) {
-    const id = codeBlock.getAttribute("data-node-id")
-    console.log(`[cb-debug] enhance called id=${id} enhanced=${codeBlock.dataset.cbEnhanced} hljs=${!!hljs} lines=${hljs ? getCodeText(hljs).split("\n").length : "?"}`)
-  }
   // 装饰增强：背景/纹理/当前行高亮/统计角标/长代码条（注册表统一调度）
   enhanceAll({
     codeBlock,
@@ -356,14 +352,9 @@ function enhance(codeBlock: HTMLElement) {
     codeBlock.dataset.cbEditRefresh = "1"
     let editTimer = 0
     const editMo = new MutationObserver(() => {
-      const dbg = (window as any).__CB_DEBUG
-      const id = codeBlock.getAttribute("data-node-id")
       const hljsNow = codeBlock.querySelector<HTMLElement>(".hljs")
       const text = hljsNow ? getCodeText(hljsNow).trim() : ""
       const linesNow = hljsNow ? getCodeText(hljsNow).split("\n").length : 0
-      if (dbg) {
-        console.log(`[cb-debug] mo-fired id=${id} lines=${linesNow} textLen=${text.length} enhanced=${codeBlock.dataset.cbEnhanced}`)
-      }
       // 内容非占位（>1 字符且有行数）→ 内容就绪，防抖后重新增强
       if (text.length > 1 && linesNow > 0) {
         window.clearTimeout(editTimer)
