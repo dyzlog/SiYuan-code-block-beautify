@@ -444,6 +444,45 @@ function clearBlockSelect() {
   debugSelectionState("clearBlockSelect after clear", sel, hljs)
 }
 
+/**
+ * 实时清理：拖选期间移除思源块选中标记。
+ *
+ * 关键（时间线实测）：移除标记让思源从「块选中模式」退回「文本选择模式」——
+ * 没有它，多行文本选择会被阻断（用户实测：删除后无法多行选中）。
+ * 副作用：思源随后会重新加标记（加→移除循环）→ 视觉闪烁。
+ * 闪烁由 scss 的 CSS 覆盖消除（.code-block.cb-beautified.protyle-wysiwyg--select
+ * 背景/阴影置空），这里只管移除标记恢复文本选择。
+ */
+let realtimeClearInstalled = false
+
+function installRealtimeClear() {
+  if (realtimeClearInstalled) {
+    return
+  }
+  realtimeClearInstalled = true
+  document.addEventListener("selectionchange", () => {
+    if (!realtimeClearInstalled || !draggingCodeText) {
+      return
+    }
+    const sel = window.getSelection()
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+      return
+    }
+    const hljs = resolveSelectionHljs(sel)
+    if (!hljs || !shouldClearBlockSelect(sel, hljs)) {
+      return
+    }
+    // 移除思源块选中标记（思源拖选中持续添加；移除后思源退回文本选择模式）
+    const marked = document.querySelectorAll<HTMLElement>(".protyle-wysiwyg--select")
+    if (marked.length > 0) {
+      marked.forEach((el) => el.classList.remove("protyle-wysiwyg--select"))
+      if (DEBUG_SELECTION_GUARD) {
+        console.log("[selection-guard] realtime clear", marked.length, "block-select marks")
+      }
+    }
+  })
+}
+
 /** 安装 document 级 mouseup（只绑定一次；插件卸载时通过 destroySelectionGuard 移除） */
 function installDocumentMouseUp() {
   if (onDocMouseUp) {
@@ -469,6 +508,7 @@ function installDocumentMouseUp() {
 /** 初始化：给代码块 .hljs 绑定 mousedown（标记拖选起点，防重复） */
 function initSelectionGuard(hljs: HTMLElement) {
   installDocumentMouseUp()
+  installRealtimeClear()
   if (boundHljs.has(hljs)) {
     return
   }
@@ -493,6 +533,10 @@ function destroySelectionGuard() {
   if (onDocMouseUp) {
     document.removeEventListener("mouseup", onDocMouseUp)
     onDocMouseUp = null
+  }
+  if (realtimeClearInstalled) {
+    // selectionchange 是匿名监听无法单独移除，用标志位失效
+    realtimeClearInstalled = false
   }
   draggingCodeText = false
 }

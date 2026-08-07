@@ -400,3 +400,17 @@
 .cb-setting__reset {
   margin-right: auto;
 }
+
+/* 拖选覆盖：思源拖选代码文本时给代码块加 .protyle-wysiwyg--select（块选中背景高亮）。
+   这是思源选择过程的正常标记——不能移除 class（会阻断多行文本选择），
+   只做 CSS 视觉覆盖：块选中背景/阴影/伪元素高亮不显示，思源内部逻辑不受影响。 */
+.code-block.cb-beautified.protyle-wysiwyg--select {
+  background-color: var(--cb-bg-color, var(--b3-theme-background)) !important;
+  box-shadow: none !important;
+  outline: none !important;
+  filter: none !important;
+}
+
+.code-block.cb-beautified.protyle-wysiwyg--select::after {
+  content: none !important;
+}
