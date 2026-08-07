@@ -107,12 +107,13 @@ function setStyle(el: HTMLElement, prop: "left" | "top" | "width" | "height" | "
 function applyGeom(ov: HTMLElement, g: OverlayGeom) {
   const {
     blockRect,
-    scrollerRect,
   } = g
   // 位置：overlay 与 codeBlock 同父，父容器加 position: relative 使 overlay
   // 的 offsetParent = 父容器。overlay absolute left:0 top:0，直接设置
-  // top/left = codeBlock 相对父容器的布局偏移——无需 transform。
+  // top/left = codeBlock 相对父容器的布局偏移（offsetTop/offsetLeft）——
   // 滚动时父容器内容一起移动，top/left 不变 → 天然跟随，零浮动零计算。
+  // 不做 clip-path 裁剪：overlay 跟随 codeBlock，代码块自身已被思源裁剪，
+  // 装饰（角标/按钮）在代码块内，滚出视口时随代码块一起不可见。
   const offset = staticOffsets.get(ov)
   if (offset) {
     setStyle(ov, "left", `${offset.left}px`)
@@ -121,26 +122,8 @@ function applyGeom(ov: HTMLElement, g: OverlayGeom) {
   // 尺寸：与代码块一致（内部装饰绝对定位依赖）
   setStyle(ov, "width", `${blockRect.width}px`)
   setStyle(ov, "height", `${blockRect.height}px`)
-  // 同生共死：裁剪到与代码块相同的可视区（滚动时随视口坐标更新）
-  if (!scrollerRect) {
-    setStyle(ov, "clipPath", "")
-    setStyle(ov, "visibility", "")
-    return
-  }
-  if (!isBlockVisible(g)) {
-    // 完全滚出视口：隐藏且不再写位置（不可见，位置无意义）
-    setStyle(ov, "visibility", "hidden")
-    return
-  }
+  setStyle(ov, "clipPath", "")
   setStyle(ov, "visibility", "")
-  const top = Math.max(0, scrollerRect.top - blockRect.top)
-  const right = Math.max(0, blockRect.right - scrollerRect.right)
-  const bottom = Math.max(0, blockRect.bottom - scrollerRect.bottom)
-  const left = Math.max(0, scrollerRect.left - blockRect.left)
-  const clip = (top === 0 && right === 0 && bottom === 0 && left === 0)
-    ? ""
-    : `inset(${top}px ${right}px ${bottom}px ${left}px)`
-  setStyle(ov, "clipPath", clip)
 }
 
 /** 当前帧已同步的块集合（下一帧整体替换新实例，实现自动清空） */
@@ -171,8 +154,8 @@ function syncOverlay(codeBlock: HTMLElement, ov: HTMLElement) {
   // 布局变化（ResizeObserver 触发）时重算偏移：overlay 与 codeBlock 同父，
   // offsetTop/offsetLeft 相对同一 offsetParent，差值即精确位置
   staticOffsets.set(ov, {
-    left: codeBlock.offsetLeft - ov.offsetLeft,
-    top: codeBlock.offsetTop - ov.offsetTop,
+    left: codeBlock.offsetLeft,
+    top: codeBlock.offsetTop,
   })
   applyGeom(ov, readGeom(codeBlock))
 }
@@ -319,8 +302,8 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
     // 相同 → offsetTop/offsetLeft 差值即精确位置。滚动时父容器内容一起移动，
     // 差值不变 → transform 无需更新（零浮动零计算）。
     staticOffsets.set(ov, {
-      left: codeBlock.offsetLeft - ov.offsetLeft,
-      top: codeBlock.offsetTop - ov.offsetTop,
+      left: codeBlock.offsetLeft,
+      top: codeBlock.offsetTop,
     })
     ensureWheelForward(codeBlock, ov)
     // 位置/尺寸变化自动跟随：共享 ResizeObserver 观察该块（布局变化时重新定位）
