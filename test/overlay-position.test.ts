@@ -77,12 +77,12 @@ describe("overlay 兄弟节点定位", () => {
     document.body.innerHTML = ""
   })
 
-  it("overlay 在 codeBlock 之前（兄弟，避开向后遍历）且不修改 wysiwyg 样式", () => {
+  it("overlay 在 codeBlock 之前（兄弟），父容器获得 position: relative（定位基础）", () => {
     const { code, ov, wysiwyg } = buildEditor()
     // 在 codeBlock 之前（思源块框选从 codeBlock 向后遍历，不经过它）
     expect(ov.nextElementSibling).toBe(code)
-    // 不修改 wysiwyg 的 position（不污染思源布局）
-    expect(wysiwyg.style.position).toBe("")
+    // 父容器 position: relative（overlay absolute 定位的 offsetParent 基础）
+    expect(wysiwyg.style.position).toBe("relative")
     document.body.innerHTML = ""
   })
 

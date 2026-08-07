@@ -109,18 +109,16 @@ function applyGeom(ov: HTMLElement, g: OverlayGeom) {
     blockRect,
     scrollerRect,
   } = g
-  // 位置：overlay 锚定 .protyle-wysiwyg（滚动内容），transform 表达
-  // codeBlock 相对锚定容器的偏移——滚动时该偏移不变（overlay 与 codeBlock
-  // 一起随内容原生移动），transform 无需更新 → 零浮动零计算。
-  // （getOverlay 创建时必写 staticOffsets，此处恒有值，无 fallback 分支）
-  const offset = staticOffsets.get(ov)!
-  const x = offset.left
-  const y = offset.top
-  const t = `translate(${x}px, ${y}px)`
-  if (ov.style.transform !== t) {
-    ov.style.transform = t
+  // 位置：overlay 与 codeBlock 同父，父容器加 position: relative 使 overlay
+  // 的 offsetParent = 父容器。overlay absolute left:0 top:0，直接设置
+  // top/left = codeBlock 相对父容器的布局偏移——无需 transform。
+  // 滚动时父容器内容一起移动，top/left 不变 → 天然跟随，零浮动零计算。
+  const offset = staticOffsets.get(ov)
+  if (offset) {
+    setStyle(ov, "left", `${offset.left}px`)
+    setStyle(ov, "top", `${offset.top}px`)
   }
-  // 尺寸：transform 不改变布局尺寸，width/height 仍需真实值（内部元素绝对定位依赖）
+  // 尺寸：与代码块一致（内部装饰绝对定位依赖）
   setStyle(ov, "width", `${blockRect.width}px`)
   setStyle(ov, "height", `${blockRect.height}px`)
   // 同生共死：裁剪到与代码块相同的可视区（滚动时随视口坐标更新）
@@ -305,6 +303,12 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
     // - 与 codeBlock 同父 → transform 用 codeBlock.offsetTop/offsetLeft 相对
     //   同一 offsetParent，差值即精确位置（无嵌套/滚动坐标系问题）
     if (parent) {
+      // 父容器 position: relative：使 overlay（absolute）的 offsetParent = 父容器，
+      // top/left 直接相对 codeBlock 位置（与 codeBlock 同父，差值精确）。
+      // 注意：只加这一个声明，不影响父容器内其它子元素的布局（relative 无副作用）。
+      if (!parent.style.position) {
+        parent.style.position = "relative"
+      }
       parent.insertBefore(ov, codeBlock)
     }
     overlayMap.set(codeBlock, ov)
