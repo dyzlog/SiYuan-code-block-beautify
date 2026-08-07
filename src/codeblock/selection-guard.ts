@@ -444,44 +444,6 @@ function clearBlockSelect() {
   debugSelectionState("clearBlockSelect after clear", sel, hljs)
 }
 
-/**
- * 实时清理：拖选期间（思源在 selectionchange 中就加 protyle-wysiwyg--select，
- * 见日志 blockSelectCount=2），不等 mouseup——每次 selectionchange 检测到
- * 「代码块内选区 + 块选中标记」立即移除。
- */
-let realtimeClearInstalled = false
-
-function installRealtimeClear() {
-  if (realtimeClearInstalled) {
-    return
-  }
-  realtimeClearInstalled = true
-  document.addEventListener("selectionchange", () => {
-    if (!realtimeClearInstalled || !draggingCodeText) {
-      // 仅处理「从代码文本开始拖选」的实时清理；
-      // 非拖选（点击块标/编辑选中）不动思源原生块选中
-      return
-    }
-    const sel = window.getSelection()
-    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-      return
-    }
-    // 选区必须落在代码块内（否则不动思源的其它块选中）
-    const hljs = resolveSelectionHljs(sel)
-    if (!hljs || !shouldClearBlockSelect(sel, hljs)) {
-      return
-    }
-    // 检测到块选中标记就立即移除（思源拖选中持续添加）
-    const marked = document.querySelectorAll<HTMLElement>(".protyle-wysiwyg--select")
-    if (marked.length > 0) {
-      marked.forEach((el) => el.classList.remove("protyle-wysiwyg--select"))
-      if (DEBUG_SELECTION_GUARD) {
-        console.log("[selection-guard] realtime clear", marked.length, "block-select marks")
-      }
-    }
-  })
-}
-
 /** 安装 document 级 mouseup（只绑定一次；插件卸载时通过 destroySelectionGuard 移除） */
 function installDocumentMouseUp() {
   if (onDocMouseUp) {
@@ -507,7 +469,6 @@ function installDocumentMouseUp() {
 /** 初始化：给代码块 .hljs 绑定 mousedown（标记拖选起点，防重复） */
 function initSelectionGuard(hljs: HTMLElement) {
   installDocumentMouseUp()
-  installRealtimeClear()
   if (boundHljs.has(hljs)) {
     return
   }
@@ -532,11 +493,6 @@ function destroySelectionGuard() {
   if (onDocMouseUp) {
     document.removeEventListener("mouseup", onDocMouseUp)
     onDocMouseUp = null
-  }
-  if (realtimeClearInstalled) {
-    // 注意：selectionchange 是匿名函数，无法单独移除。
-    // 用标志位让回调失效（插件卸载后不再清理，避免影响思源原生块选中）
-    realtimeClearInstalled = false
   }
   draggingCodeText = false
 }
