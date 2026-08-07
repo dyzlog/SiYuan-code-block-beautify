@@ -24,11 +24,6 @@ const overlayMap = new WeakMap<HTMLElement, HTMLElement>()
 const scrollerMap = new WeakMap<HTMLElement, HTMLElement | null>()
 /** 活跃的 codeBlock 集合（WeakMap 不可遍历，滚动/清理时需要遍历） */
 const activeBlocks = new Set<HTMLElement>()
-/** overlay 相对锚定容器的偏移（布局变化时重算；滚动时不变，原生跟随） */
-const staticOffsets = new WeakMap<HTMLElement, {
-  left: number
-  top: number
-}>()
 /** 共享 ResizeObserver（单实例观察所有增强块，替代每块一个 RO） */
 let sharedResizeObserver: ResizeObserver | null = null
 
@@ -112,18 +107,8 @@ function applyGeom(ov: HTMLElement, g: OverlayGeom) {
     blockRect,
     scrollerRect,
   } = g
-  // 位置：overlay 锚定 .protyle-wysiwyg（滚动内容），transform 表达
-  // codeBlock 相对锚定容器的偏移——滚动时该偏移不变（overlay 与 codeBlock
-  // 一起随内容原生移动），transform 无需更新 → 零浮动零计算。
-  // （getOverlay 创建时必写 staticOffsets，此处恒有值，无 fallback 分支）
-  const offset = staticOffsets.get(ov)!
-  const x = offset.left
-  const y = offset.top
-  const t = `translate(${x}px, ${y}px)`
-  if (ov.style.transform !== t) {
-    ov.style.transform = t
-  }
-  // 尺寸：transform 不改变布局尺寸，width/height 仍需真实值（内部元素绝对定位依赖）
+  // 位置：overlay 是 codeBlock 内部子元素（absolute inset 0），随 codeBlock
+  // 自动定位/滚动，无需 transform。尺寸与 codeBlock 一致（内部元素绝对定位依赖）。
   setStyle(ov, "width", `${blockRect.width}px`)
   setStyle(ov, "height", `${blockRect.height}px`)
   // 同生共死：裁剪到与代码块相同的可视区（滚动时随视口坐标更新）
@@ -173,16 +158,7 @@ function syncOverlay(codeBlock: HTMLElement, ov: HTMLElement) {
       syncedThisFrame = new WeakSet<HTMLElement>()
     })
   }
-  // 布局变化（ResizeObserver 触发）时重算 codeBlock 相对锚定容器的偏移
-  const anchor = codeBlock.closest<HTMLElement>(".protyle-wysiwyg")
-  if (anchor) {
-    const parentRect = anchor.getBoundingClientRect()
-    const blockRect = codeBlock.getBoundingClientRect()
-    staticOffsets.set(ov, {
-      left: blockRect.left - parentRect.left,
-      top: blockRect.top - parentRect.top,
-    })
-  }
+  // 布局变化（ResizeObserver 触发）时重新同步几何（尺寸/裁剪）
   applyGeom(ov, readGeom(codeBlock))
 }
 
@@ -280,51 +256,32 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
   if (!ov || !ov.isConnected) {
     ov = document.createElement("div")
     ov.className = "cb-overlay"
-    // overlay 必须完全透明于浏览器 selection 系统：
-    // - 不加 contenteditable="false"：不可编辑区域是 selection 强制边界，拖选
-    //   代码文本越出 .hljs 时 selection 被收缩/重定位 → 思源进入框选模式 →
-    //   反复加 protyle-wysiwyg--select（闪烁，用户时间线实测）
-    // - 不加 user-select: none：同样是「不可选边界」
-    // 只靠 pointer-events: none 隔离鼠标交互；overlay 是纯视觉层。
+    // overlay 是 codeBlock 的内部子元素（absolute inset 覆盖），不是兄弟节点。
+    // 关键：作为兄弟节点时，思源 mousedown 后的块框选逻辑会遍历
+    // nextElementSibling 链（wysiwyg/index.ts），overlay 的 getBoundingClientRect
+    // 覆盖代码块区域 → 被框选逻辑命中 → 反复加 protyle-wysiwyg--select（闪烁）。
+    // 移到内部后思源遍历兄弟链完全看不到它 → 根治闪烁。
+    // contenteditable="false"：防止思源编辑代码块时把 overlay 内容写入文档
+    // （纯视觉装饰层，不允许被编辑/序列化）
+    ov.setAttribute("contenteditable", "false")
     ov.style.position = "absolute"
-    ov.style.left = "0"
-    ov.style.top = "0"
+    ov.style.inset = "0"
     ov.style.pointerEvents = "none"
-    // 注意：不给 overlay 容器加 user-select: none——作为代码块兄弟节点的覆盖层，
-    // user-select:none 会让浏览器把 overlay 覆盖区域当作「不可选边界」，
-    // 拖选代码文本越出 .hljs 时 selection 被吸附/扩展异常 → 思源触发块级选中。
-    // 各装饰子元素（高亮/角标/按钮）自身的 user-select:none 已足够。
-    // 裁剪内部装饰到 overlay 盒：高亮在长代码内部滚动时
-    // 用 transform 上移，可能超出 overlay 顶部穿透到上方代码块——overflow
-    // hidden 把移出的部分裁掉，杜绝「下方块内容显示到上方块」的穿透
+    // 裁剪内部装饰到 overlay 盒（长代码内部滚动时高亮上移不穿透）
     ov.style.overflow = "hidden"
-    const parent = codeBlock.parentElement
-    if (parent) {
-      parent.insertBefore(ov, codeBlock.nextSibling)
-    }
+    codeBlock.appendChild(ov)
     overlayMap.set(codeBlock, ov)
     activeBlocks.add(codeBlock)
     scrollerMap.set(codeBlock, codeBlock.closest<HTMLElement>(".protyle-content"))
-    // 锚定 .protyle-wysiwyg（滚动内容）：加 position: relative 使 overlay
-    // 的 offsetParent 变为 wysiwyg → 滚动时 overlay 随内容原生跟随。
-    // 已验证不影响思源内部 absolute 子元素（块标 fixed、块内锚定块自身）。
-    const anchor = codeBlock.closest<HTMLElement>(".protyle-wysiwyg")
-    if (anchor && !anchor.style.position) {
-      anchor.style.position = "relative"
-    }
-    // 记录 codeBlock 相对锚定容器的偏移（滚动时恒定，transform 基准）
-    const parentRect = anchor ? anchor.getBoundingClientRect() : null
-    const blockRect = codeBlock.getBoundingClientRect()
-    staticOffsets.set(ov, {
-      left: parentRect ? blockRect.left - parentRect.left : 0,
-      top: parentRect ? blockRect.top - parentRect.top : 0,
-    })
+    // 内部子元素定位：absolute inset 0 相对 codeBlock（position: relative 已有），
+    // 滚动/尺寸变化自然跟随，无需 transform / anchor / scroll-sync。
     ensureWheelForward(codeBlock, ov)
-    // 位置/尺寸变化自动跟随：共享 ResizeObserver 观察该块（布局变化时重新定位）
+    // 滚动裁剪（clip-path/visibility）需要 scroll 监听
+    ensureScrollSync()
+    // 位置/尺寸变化自动跟随：共享 ResizeObserver 观察该块
     if ("ResizeObserver" in window) {
       observeBlockResize(codeBlock)
     }
-    ensureScrollSync()
   }
   syncOverlay(codeBlock, ov)
   return ov
