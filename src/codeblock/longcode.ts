@@ -318,10 +318,8 @@ function isDefaultTheme(): boolean {
 /**
  * 长代码条整体调度（代码块增强时调用一次，内部策略自管）：
  * - 主题栏开关关闭 → 完整清理
- * - 默认主题（daylight/midnight）→ 隐藏装饰栏（原生工具栏左上角会重叠），
- *   但长代码折叠按钮仍保留（走 renderLongCodeBtnOnly）
- * - 长代码 + 折叠开启 → 收起按钮 + 折叠态
- * - 否则仅顶部主题装饰栏（短代码也显示装饰，无收起按钮）
+ * - 短代码（≤阈值或折叠关闭）→ 默认主题清理 / 其它主题渲染装饰栏
+ * - 长代码 → 收起按钮 + 折叠态（默认主题下装饰栏隐藏，仅按钮）
  */
 function renderLongCodeSection(
   codeBlock: HTMLElement,
@@ -335,42 +333,19 @@ function renderLongCodeSection(
     return
   }
   const defaultTheme = isDefaultTheme()
-  if (defaultTheme) {
-    // 默认主题：装饰栏隐藏（renderLongCodeBar 内部处理），
-    // 仅保留长代码收起/展开按钮（功能不受影响）
-    if (!settings.longCodeFold) {
+  const isLong = settings.longCodeFold && countVisibleLines(text) > settings.longCodeThreshold
+  if (!isLong) {
+    // 短代码：默认主题下不显示装饰栏（原生语言标记左上角会重叠），其它主题正常渲染
+    if (defaultTheme) {
       clearLongCodeBar(codeBlock)
-      return
+    } else {
+      renderThemeBar(codeBlock, settings.themeStyle)
     }
-    const lineCount = countVisibleLines(text)
-    const n = settings.longCodeThreshold
-    if (lineCount <= n) {
-      clearLongCodeBar(codeBlock)
-      return
-    }
-    const {
-      top,
-      height,
-    } = measureLineAt(hljs, text, Math.min(n, lineCount) - 1)
-    const hljsStyle = getComputedStyle(hljs)
-    const padBottom = Number.parseFloat(hljsStyle.paddingBottom) || 0
-    const borderV = (Number.parseFloat(hljsStyle.borderTopWidth) || 0)
-      + (Number.parseFloat(hljsStyle.borderBottomWidth) || 0)
-    const topNHeight = top > 0 ? top + height + padBottom + borderV : 0
-    renderLongCodeBar(codeBlock, lineCount, n, topNHeight, settings.themeStyle)
-    return
-  }
-  if (!settings.longCodeFold) {
-    renderThemeBar(codeBlock, settings.themeStyle)
-    return
-  }
-  const lineCount = countVisibleLines(text)
-  const n = settings.longCodeThreshold
-  if (lineCount <= n) {
-    renderThemeBar(codeBlock, settings.themeStyle)
     return
   }
   // 只测量阈值行（第 n 行）的顶部与高度，用于收起高度
+  const n = settings.longCodeThreshold
+  const lineCount = countVisibleLines(text)
   const {
     top,
     height,
