@@ -28,24 +28,6 @@ import {
 } from "@/codeblock/settings"
 import "@/index.scss"
 
-/**
- * 同步思源原生行号开关（显示代码行）。
- * 直接改 window.siyuan.config.editor.codeSyntaxHighlightLineNum 并重渲染行号——
- * 无需网络请求，即时生效；思源设置页后续保存会覆盖为一致值。
- */
-function syncNativeLineNumber(show: boolean) {
-  const w = window as unknown as { siyuan?: { config?: { editor?: { codeSyntaxHighlightLineNum?: boolean } } } }
-  if (w.siyuan?.config?.editor) {
-    w.siyuan.config.editor.codeSyntaxHighlightLineNum = show
-    // 重渲染所有代码块行号（思源原生：行号容器切换显示）
-    document.querySelectorAll<HTMLElement>(".code-block .protyle-linenumber__rows").forEach((el) => {
-      if (el.parentElement) {
-        el.className = show ? "protyle-linenumber__rows" : "protyle-linenumber__rows fn__none"
-      }
-    })
-  }
-}
-
 const {
   version,
 } = PluginInfoString
@@ -65,8 +47,6 @@ export default class CodeBlockBeautify extends Plugin {
     applyHighlightTheme(s.highlightTheme)
     applyBackgroundImage(s.backgroundImage)
     applyThemeStyleClass(s.themeStyleEnabled ? s.themeStyle : "")
-    // 思源原生行号开关（插件设置默认 true；改动时同步思源配置）
-    syncNativeLineNumber(s.showLineNumber)
   }
 
   async onload() {
@@ -133,8 +113,6 @@ export default class CodeBlockBeautify extends Plugin {
           updateSettings(next)
           this.saveData(STORAGE_NAME, next)
             .catch((e) => console.warn('save settings failed', e))
-          // 同步思源原生行号开关（setEditor API 保存整个 editor 配置）
-          syncNativeLineNumber(next.showLineNumber)
           showMessage(this.i18n.saved || '设置已保存', 3000, 'info')
         },
       })

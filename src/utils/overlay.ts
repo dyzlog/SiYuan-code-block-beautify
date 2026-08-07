@@ -1,23 +1,23 @@
 /**
- * Overlay 层：插件注入元素的兄弟容器（污染根治）。
+ * Overlay 层：插件视觉装饰的容器。
  *
- * 所有视觉装饰元素（行号列/统计角标/当前行高亮/长代码条等）
- * 必须挂在 codeBlock 的「兄弟 overlay」上，而不是 codeBlock 内部——
- * 否则思源序列化代码块内容（updateTransaction 读 element.outerHTML）时
- * 会把装饰 DOM 写进文档，永久污染用户代码。
+ * 所有视觉装饰元素（统计角标/长代码条/背景等）挂在 codeBlock 的
+ * 「内部子元素 overlay」上（absolute inset:0 覆盖代码块）。
  *
- * 定位方案：position: absolute + 锚定 .protyle-wysiwyg（滚动内容）。
- * - 给 .protyle-wysiwyg 加 position: relative（仅一个声明，已验证不影响
- *   思源内部任何 absolute 子元素：块标是 fixed、块内元素锚定块自身、
- *   伪元素锚定主体），overlay 的 offsetParent 变为 wysiwyg
- * - 滚动时 overlay 作为 wysiwyg 内元素随内容「浏览器原生跟随」——
- *   onScroll 只做 clip-path 裁剪与可见性，不更新 transform（零浮动）
- * - transform 仅在布局变化（ResizeObserver：增删/折叠/懒加载）时更新
- * - 同生共死：clip-path: inset() 裁剪到与代码块相同的可视区；
- *   完全滚出时 visibility: hidden
- * - z-index: 1（思源 dialog 用 ++window.siyuan.zIndex 动态递增、从 10 起步，
- *   永远高于 1，因此 overlay 绝不会穿透 dialog/menu）
- * - ResizeObserver 跟随尺寸变化（折叠/编辑导致的行高变化）
+ * 为什么是内部子元素而不是兄弟节点：
+ * - 作为兄弟节点时，思源 mousedown 后的块框选逻辑会遍历 nextElementSibling 链，
+ *   overlay 的 getBoundingClientRect 覆盖代码块区域 → 被框选命中 → 反复加
+ *   protyle-wysiwyg--select（拖选闪烁，时间线实测确认）
+ * - 移到内部后思源遍历兄弟链完全看不到它 → 根治闪烁
+ *
+ * 防污染：overlay 设 contenteditable="false"，思源编辑代码块时不会把
+ * 装饰 DOM 写入文档。
+ *
+ * 定位：absolute inset:0 相对 codeBlock（position:relative），随代码块
+ * 自动定位/滚动，无需 transform。
+ * - 滚动裁剪：onScroll 用 clip-path 裁剪到可视区，完全滚出时 visibility: hidden
+ * - ResizeObserver 跟随尺寸变化
+ * - z-index 由各装饰元素自身控制，overlay 不设穿透风险
  */
 const overlayMap = new WeakMap<HTMLElement, HTMLElement>()
 /** 每个 codeBlock 对应的滚动容器（.protyle-content），缓存避免每帧 closest */
@@ -96,7 +96,7 @@ function readGeom(codeBlock: HTMLElement): OverlayGeom {
 }
 
 /** 写入去重辅助：值相同则跳过（避免无意义 DOM 写触发重绘） */
-function setStyle(el: HTMLElement, prop: "left" | "top" | "width" | "height" | "clipPath" | "visibility", value: string) {
+function setStyle(el: HTMLElement, prop: "width" | "height" | "clipPath" | "visibility", value: string) {
   if (el.style[prop] !== value) {
     el.style[prop] = value
   }

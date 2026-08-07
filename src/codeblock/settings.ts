@@ -30,8 +30,6 @@ export interface CodeBlockSettings {
   shadowSize: number
   /** 代码统计角标（底部显示行数/字符数） */
   codeStats: boolean
-  /** 思源原生行号开关（同步 window.siyuan.config.editor.codeSyntaxHighlightLineNum） */
-  showLineNumber: boolean
   /** 语法高亮主题（空 = 跟随思源设置，否则覆盖为指定 hljs 主题） */
   highlightTheme: string
   /** 长代码折叠（超出阈值行数显示「只显示固定行」按钮） */
@@ -58,7 +56,6 @@ export const DEFAULT_SETTINGS: CodeBlockSettings = {
   backgroundMaskOpacity: 78,
   shadowSize: 8,
   codeStats: true,
-  showLineNumber: true,
   highlightTheme: "",
   longCodeFold: true,
   longCodeThreshold: 20,
