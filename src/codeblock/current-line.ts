@@ -133,6 +133,13 @@ function initCurrentLine(codeBlock: HTMLElement, hljs: HTMLElement, enabled: boo
     if (Date.now() - lastMouseMoveAt < 200) {
       return
     }
+    // 用户正在选中文本（非折叠 selection）→ 跳过高亮更新：
+    // 此时修改 DOM 会干扰思源 selection 锚点，导致「选中两行触发整个代码块被选中」。
+    // 高亮只应跟随光标（折叠 selection）。
+    const sel = window.getSelection()
+    if (sel && !sel.isCollapsed) {
+      return
+    }
     schedule()
   }, opts)
   // 光标彻底离开代码块 → 仅移除高亮（保留监听，光标回来继续跟随）
