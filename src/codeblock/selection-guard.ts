@@ -24,18 +24,48 @@ let onDocMouseUp: (() => void) | null = null
 /** 已绑定 mousedown 监听的 .hljs（防重复增强累积监听） */
 const boundHljs = new WeakSet<HTMLElement>()
 
+function isNodeInCodeBlock(node: Node | null, hljs: HTMLElement | null): boolean {
+  if (!node || !hljs) {
+    return false
+  }
+  let current: Node | null = node
+  while (current) {
+    if (current === hljs) {
+      return true
+    }
+    if (current.nodeType === Node.ELEMENT_NODE) {
+      const element = current as Element
+      if (element === hljs || element.closest(".hljs") === hljs) {
+        return true
+      }
+    }
+    current = current.parentNode
+  }
+  return false
+}
+
+export function shouldClearBlockSelect(selection: Selection | null, hljs: HTMLElement | null): boolean {
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !hljs) {
+    return false
+  }
+  for (let i = 0; i < selection.rangeCount; i += 1) {
+    const range = selection.getRangeAt(i)
+    if (
+      isNodeInCodeBlock(range.startContainer, hljs)
+      || isNodeInCodeBlock(range.endContainer, hljs)
+      || isNodeInCodeBlock(range.commonAncestorContainer, hljs)
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 /** 清理思源块选中标记（若存在），保留原生 selection */
 function clearBlockSelect() {
   const sel = window.getSelection()
-  if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-    return
-  }
-  // 仅当 selection 起点/终点在代码块 .hljs 内才清理（用户确实在选代码文本）
-  const range = sel.getRangeAt(0)
-  const inCode = (node: Node | null): boolean => {
-    return !!node && !!node.parentElement?.closest(".hljs")
-  }
-  if (!inCode(range.startContainer) && !inCode(range.endContainer)) {
+  const hljs = document.querySelector<HTMLElement>(".hljs")
+  if (!shouldClearBlockSelect(sel, hljs)) {
     return
   }
   // 移除思源块选中标记（视觉上恢复「选中文本」而非「选中整个块」）
