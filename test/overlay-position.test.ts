@@ -67,12 +67,13 @@ function buildEditor(): { code: HTMLElement; ov: HTMLElement; wysiwyg: HTMLEleme
 }
 
 describe("overlay 兄弟节点定位", () => {
-  it("overlay 是 codeBlock 的兄弟节点（不在内部，防污染）", () => {
-    const { code, ov } = buildEditor()
-    expect(ov.parentElement).toBe(code.parentElement)
-    expect(ov.previousElementSibling).toBe(code)
-    // 不在 codeBlock 内部 → 思源 outerHTML 序列化不会带走它
+  it("overlay 是 codeBlock 的兄弟节点且插在 wysiwyg 最前面（防污染 + 避开遍历）", () => {
+    const { code, ov, wysiwyg } = buildEditor()
+    // 不在 codeBlock 内部 → 思源 outerHTML 序列化不会带走它（防污染）
     expect(code.contains(ov)).toBe(false)
+    // 插在 wysiwyg 最前面 → 思源块框选向后遍历不会经过它（不闪烁）
+    expect(ov.parentElement).toBe(wysiwyg)
+    expect(wysiwyg.firstElementChild).toBe(ov)
     document.body.innerHTML = ""
   })
 

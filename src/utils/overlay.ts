@@ -299,8 +299,18 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
     // hidden 把移出的部分裁掉，杜绝「下方块内容显示到上方块」的穿透
     ov.style.overflow = "hidden"
     const parent = codeBlock.parentElement
-    if (parent) {
-      parent.insertBefore(ov, codeBlock.nextSibling)
+    const anchor = codeBlock.closest<HTMLElement>(".protyle-wysiwyg")
+    // 关键：overlay 必须插到 .protyle-wysiwyg 的「最前面」而非 codeBlock 之后。
+    // 思源 mousedown 后的块框选逻辑从 codeBlock 开始向后（nextElementSibling）
+    // 遍历兄弟链，若 overlay 在 codeBlock 之后会被遍历命中 → 反复加
+    // protyle-wysiwyg--select（拖选闪烁，用户实测）。插到最前面后，向后遍历
+    // 永远不会经过它（遍历只向后不回头）→ 不闪烁。
+    // 同时 overlay 是 codeBlock 的兄弟（不在其内部）→ 思源 outerHTML 序列化
+    // 不会带走它 → 不污染原代码。
+    if (anchor && anchor !== parent) {
+      anchor.insertBefore(ov, anchor.firstChild)
+    } else if (parent) {
+      parent.insertBefore(ov, parent.firstChild)
     }
     overlayMap.set(codeBlock, ov)
     activeBlocks.add(codeBlock)
@@ -308,7 +318,6 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
     // 锚定 .protyle-wysiwyg（滚动内容）：加 position: relative 使 overlay
     // 的 offsetParent 变为 wysiwyg → 滚动时 overlay 随内容原生跟随。
     // 已验证不影响思源内部 absolute 子元素（块标 fixed、块内锚定块自身）。
-    const anchor = codeBlock.closest<HTMLElement>(".protyle-wysiwyg")
     if (anchor && !anchor.style.position) {
       anchor.style.position = "relative"
     }
