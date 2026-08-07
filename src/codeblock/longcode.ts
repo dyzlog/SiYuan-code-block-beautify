@@ -355,10 +355,17 @@ function renderLongCodeSection(
       height,
     } = measureLineAt(hljs, text, Math.min(n, lineCount) - 1)
     const hljsStyle = getComputedStyle(hljs)
+    // maxHeight 限 content-box 高度；top 从 border-box 顶起算（含 paddingTop）。
+    // 目标总高（border-box）= top + height（第 n 行底部），减去 padding/border
+    // 才是 content-box 的 maxHeight——否则会多显示几行（用户实测：28 行显示 31）。
+    const padTop = Number.parseFloat(hljsStyle.paddingTop) || 0
     const padBottom = Number.parseFloat(hljsStyle.paddingBottom) || 0
     const borderV = (Number.parseFloat(hljsStyle.borderTopWidth) || 0)
       + (Number.parseFloat(hljsStyle.borderBottomWidth) || 0)
-    const topNHeight = top > 0 ? top + height + padBottom + borderV : 0
+    const targetHeight = top + height
+    const topNHeight = top > 0
+      ? targetHeight - padTop - padBottom - borderV
+      : 0
     renderLongCodeBar(codeBlock, lineCount, n, topNHeight, showTheme ? settings.themeStyle : "")
     return
   }
