@@ -9,3 +9,5 @@ dist
 build
 tmp
 .env
+# Reasonix 本地工具数据（剪贴板附件/会话元数据/技能），不进入仓库
+.reasonix
