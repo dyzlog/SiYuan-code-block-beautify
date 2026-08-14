@@ -7,6 +7,8 @@
  * 等单 class 选择器，后加载的 link 会覆盖思源默认主题，无需改动思源配置。
  */
 
+import { replaceClassByPrefix } from "../utils/dom-helpers"
+
 const LINK_ID = "cb-hljs-theme"
 
 /** 常用 hljs 主题（值即主题文件名，路径由思源内置目录提供） */
@@ -75,15 +77,7 @@ const THEME_CLASS_PREFIX = "cb-theme-"
  * 此 class 放在 `<html>` 上，让 CSS 重写思源原生右上角工具（语言/复制/更多）的配色。
  */
 export function applyThemeStyleClass(themeStyle: string) {
-  const root = document.documentElement
-  root.classList.forEach((cls) => {
-    if (cls.startsWith(THEME_CLASS_PREFIX)) {
-      root.classList.remove(cls)
-    }
-  })
-  if (themeStyle) {
-    root.classList.add(`${THEME_CLASS_PREFIX}${themeStyle}`)
-  }
+  replaceClassByPrefix(document.documentElement, THEME_CLASS_PREFIX, themeStyle)
 }
 
 /** 移除主题风格全局标记 */

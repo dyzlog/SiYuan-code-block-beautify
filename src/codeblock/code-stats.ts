@@ -1,7 +1,8 @@
-/** 
+/**
  * 代码统计角标：代码块底部右下角显示行数 / 字符数。
  * 低透明度、pointer-events none，不影响滚动与交互。
  */
+import { ControllerManager } from "../utils/controller-manager"
 import { getCodeText } from "../utils/dom"
 import { getOverlay } from "../utils/overlay"
 import { countVisibleLines } from "../utils/text-range"
@@ -11,7 +12,7 @@ import { registerDecor } from "./registry"
 const STATS_CLASS = "cb-stats-badge"
 
 /** 各代码块的监听控制器（防重复 init 累积事件监听） */
-const controllers = new WeakMap<HTMLElement, AbortController>()
+const controllers = new ControllerManager()
 
 /** 更新统计角标内容 */
 function updateStats(codeBlock: HTMLElement) {
@@ -21,11 +22,11 @@ function updateStats(codeBlock: HTMLElement) {
     return
   }
   const text = getCodeText(hljs)
-  //行数
+  // 行数
   const lines = countVisibleLines(text)
-  //字符数
+  // 字符数
   const chars = text.length
-  //更新角标内容
+  // 更新角标内容
   badge.textContent = `${lines} 行 · ${chars} 字符`
 }
 
@@ -38,7 +39,7 @@ function initCodeStats(codeBlock: HTMLElement, enabled: boolean) {
   const ov = getOverlay(codeBlock)
   let badge = ov.querySelector<HTMLElement>(`.${STATS_CLASS}`)
   // 先解除旧监听（设置开关/重扫可能重复初始化）
-  controllers.get(codeBlock)?.abort()
+  controllers.abortAndDelete(codeBlock)
   const ac = new AbortController()
   controllers.set(codeBlock, ac)
   if (!badge) {
@@ -57,8 +58,7 @@ function initCodeStats(codeBlock: HTMLElement, enabled: boolean) {
 
 /** 移除统计角标并解除监听 */
 function removeCodeStats(codeBlock: HTMLElement) {
-  controllers.get(codeBlock)?.abort()
-  controllers.delete(codeBlock)
+  controllers.abortAndDelete(codeBlock)
   getOverlay(codeBlock).querySelector(`.${STATS_CLASS}`)?.remove()
 }
 

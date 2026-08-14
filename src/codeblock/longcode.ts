@@ -10,7 +10,12 @@
  */
 
 import type { CodeBlockSettings } from "./settings"
+import { ControllerManager } from "../utils/controller-manager"
 import { getCodeText } from "../utils/dom"
+import {
+  createEl,
+  removeAll,
+} from "../utils/dom-helpers"
 import { getOverlay } from "../utils/overlay"
 import { countVisibleLines } from "../utils/text-range"
 import { measureLineAt } from "./line-measure-service"
@@ -92,11 +97,9 @@ function resolveFoldHeight(codeBlock: HTMLElement, threshold: number, topNHeight
 
 /** 在顶部栏左侧追加一组圆点 */
 function appendDots(bar: HTMLElement, dotClasses: string[]) {
-  const dots = document.createElement("div")
-  dots.className = DOTS_CLASS
+  const dots = createEl("div", { className: DOTS_CLASS })
   for (const cls of dotClasses) {
-    const dot = document.createElement("span")
-    dot.className = `cb-longcode-dot ${cls}`
+    const dot = createEl("span", { className: `cb-longcode-dot ${cls}` })
     dots.appendChild(dot)
   }
   bar.appendChild(dots)
@@ -110,7 +113,7 @@ function renderThemeDecor(bar: HTMLElement, themeStyle: string) {
   if (styleClasses.includes(`${BAR_CLASS}--${themeStyle}`)) {
     bar.classList.add(`${BAR_CLASS}--${themeStyle}`)
   }
-  bar.querySelectorAll(`.${DOTS_CLASS}, .${WIN_CLASS}, .${CHROME_CLASS}, .${TERMINAL_CLASS}, .${CODESYM_CLASS}`).forEach((el) => el.remove())
+  removeAll(bar, `.${DOTS_CLASS}, .${WIN_CLASS}, .${CHROME_CLASS}, .${TERMINAL_CLASS}, .${CODESYM_CLASS}`)
   if (themeStyle === "mac") {
     // Mac 风格：左侧红黄绿圆点
     appendDots(bar, ["cb-longcode-dot--red", "cb-longcode-dot--yellow", "cb-longcode-dot--green"])
@@ -119,43 +122,47 @@ function renderThemeDecor(bar: HTMLElement, themeStyle: string) {
     appendDots(bar, ["cb-longcode-dot--orange", "cb-longcode-dot--amber", "cb-longcode-dot--green2"])
   } else if (themeStyle === "windows") {
     // Windows 风格：左侧窗口控制按钮（关闭 ✕ / 最大化 ▢ / 最小化 ─）
-    const win = document.createElement("div")
-    win.className = WIN_CLASS
+    const win = createEl("div", { className: WIN_CLASS })
     for (const ch of ["✕", "▢", "─"]) {
-      const btn = document.createElement("span")
-      btn.className = "cb-longcode-win-btn"
-      btn.textContent = ch
+      const btn = createEl("span", {
+        className: "cb-longcode-win-btn",
+        textContent: ch,
+      })
       win.appendChild(btn)
     }
     bar.appendChild(win)
   } else if (themeStyle === "chrome") {
     // Chrome 标签风格：顶部标签页 + 新标签页加号
-    const chrome = document.createElement("div")
-    chrome.className = CHROME_CLASS
-    const tab = document.createElement("span")
-    tab.className = "cb-longcode-chrome-tab"
-    tab.textContent = "代码"
-    const plus = document.createElement("span")
-    plus.className = "cb-longcode-chrome-plus"
-    plus.textContent = "+"
+    const chrome = createEl("div", { className: CHROME_CLASS })
+    const tab = createEl("span", {
+      className: "cb-longcode-chrome-tab",
+      textContent: "代码",
+    })
+    const plus = createEl("span", {
+      className: "cb-longcode-chrome-plus",
+      textContent: "+",
+    })
     chrome.appendChild(tab)
     chrome.appendChild(plus)
     bar.appendChild(chrome)
   } else if (themeStyle === "terminal") {
     // 终端提示符：❯_ 提示符 + 极简色块
-    const term = document.createElement("div")
-    term.className = TERMINAL_CLASS
-    term.textContent = "❯"
-    const cursor = document.createElement("span")
-    cursor.className = "cb-longcode-terminal-cursor"
-    cursor.textContent = "_"
+    const term = createEl("div", {
+      className: TERMINAL_CLASS,
+      textContent: "❯",
+    })
+    const cursor = createEl("span", {
+      className: "cb-longcode-terminal-cursor",
+      textContent: "_",
+    })
     term.appendChild(cursor)
     bar.appendChild(term)
   } else if (themeStyle === "codesym") {
     // 代码符号：</> 装饰
-    const sym = document.createElement("div")
-    sym.className = CODESYM_CLASS
-    sym.textContent = "</>"
+    const sym = createEl("div", {
+      className: CODESYM_CLASS,
+      textContent: "</>",
+    })
     bar.appendChild(sym)
   }
 }
@@ -168,9 +175,9 @@ const fadeInstalled = new WeakSet<HTMLElement>()
  * 幂等（WeakSet 防重复 + AbortController 清理），每次长代码/主题栏渲染时调用，
  * 确保按钮创建后也生效。clearLongCodeBar 时 abort 解除监听，杜绝重建累积。
  */
-const fadeControllers = new WeakMap<HTMLElement, AbortController>()
+const fadeControllers = new ControllerManager()
 /** 收起按钮 click 委托的控制器（btn 重建时 abort 旧委托，杜绝累积） */
-const clickControllers = new WeakMap<HTMLElement, AbortController>()
+const clickControllers = new ControllerManager()
 
 function ensureScrollFade(codeBlock: HTMLElement) {
   if (fadeInstalled.has(codeBlock)) {
@@ -294,10 +301,8 @@ function renderLongCodeBar(
 /** 完整清理长代码折叠（卸载时调用，恢复完整显示并清除状态） */
 function clearLongCodeBar(codeBlock: HTMLElement) {
   fadeInstalled.delete(codeBlock)
-  fadeControllers.get(codeBlock)?.abort()
-  fadeControllers.delete(codeBlock)
-  clickControllers.get(codeBlock)?.abort()
-  clickControllers.delete(codeBlock)
+  fadeControllers.abortAndDelete(codeBlock)
+  clickControllers.abortAndDelete(codeBlock)
   const ov = getOverlay(codeBlock)
   ov.querySelector(`.${BAR_CLASS}`)?.remove()
   ov.querySelector(`.${BTN_CLASS}`)?.remove()
