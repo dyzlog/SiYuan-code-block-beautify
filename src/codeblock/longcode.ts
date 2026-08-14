@@ -35,10 +35,12 @@ const CODESYM_CLASS = "cb-longcode-codesym"
 const FOLDED_ATTR = "cbLongFolded"
 /** 折叠状态 class（CSS 控制滚动条显隐的挂载点） */
 const FOLDED_CLASS = "cb-longcode-folded"
-/** 垂直滚动中 class（显示垂直滚动条） */
+/** 垂直滚动中 class（显示两个滚动条） */
 const SCROLLING_CLASS = "cb-longcode-scrolling"
-/** 悬停底部边框 class（显示水平滚动条） */
-const AT_BOTTOM_CLASS = "cb-longcode-at-bottom"
+/** 悬停右侧边缘 class（显示垂直滚动条） */
+const HOVER_V_CLASS = "cb-longcode-hover-v"
+/** 悬停底部边缘 class（显示水平滚动条） */
+const HOVER_H_CLASS = "cb-longcode-hover-h"
 
 interface LongCodeFoldState {
   /** 折叠时的固定高度（px） */
@@ -206,29 +208,32 @@ function ensureScrollFade(codeBlock: HTMLElement) {
     bar?.classList.add(BAR_SCROLLING_CLASS)
     const b = ov.querySelector<HTMLElement>(`.${BTN_CLASS}`)
     b?.classList.add(BTN_SCROLLING_CLASS)
-    // 垂直滚动中 → 显示垂直滚动条（CSS：cb-scrolling 恢复 scrollbar-width）
+    // 滚动中：两个滚动条都显示（CSS：cb-longcode-scrolling 恢复横纵）
     codeBlock.classList.add(SCROLLING_CLASS)
-    // 滚动中不显示水平条（滚到底部≠悬停底部）；停止后由 mousemove 重新判定
-    codeBlock.classList.remove(AT_BOTTOM_CLASS)
     window.clearTimeout(fadeTimer)
     fadeTimer = window.setTimeout(() => {
       bar?.classList.remove(BAR_SCROLLING_CLASS)
       b?.classList.remove(BTN_SCROLLING_CLASS)
     }, 300)
-    // 停止滚动 800ms 后隐藏垂直滚动条
+    // 停止滚动 800ms 后两个滚动条都隐藏（悬停边缘由 mousemove 独立控制）
     window.clearTimeout(scrollTimer)
     scrollTimer = window.setTimeout(() => {
       codeBlock.classList.remove(SCROLLING_CLASS)
     }, 800)
   }, { signal: ac.signal })
-  // 悬停代码块底部边框区域（底部 24px 内）→ 显示水平滚动条
+  // 悬停滚动条位置才显示对应滚动条：
+  // - 右侧边缘（垂直滚动条位置）→ HOVER_V
+  // - 底部边缘（水平滚动条位置）→ HOVER_H
   codeBlock.addEventListener("mousemove", (e: MouseEvent) => {
     const rect = codeBlock.getBoundingClientRect()
-    const nearBottom = e.clientY > rect.bottom - 24
-    codeBlock.classList.toggle(AT_BOTTOM_CLASS, nearBottom)
+    const nearRight = e.clientX > rect.right - 12
+    const nearBottom = e.clientY > rect.bottom - 12
+    codeBlock.classList.toggle(HOVER_V_CLASS, nearRight)
+    codeBlock.classList.toggle(HOVER_H_CLASS, nearBottom)
   }, { signal: ac.signal })
   codeBlock.addEventListener("mouseleave", () => {
-    codeBlock.classList.remove(AT_BOTTOM_CLASS)
+    codeBlock.classList.remove(HOVER_V_CLASS)
+    codeBlock.classList.remove(HOVER_H_CLASS)
   }, { signal: ac.signal })
 }
 

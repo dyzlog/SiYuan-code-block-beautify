@@ -256,10 +256,11 @@
   }
 }
 
-/* 折叠态滚动条显隐：
-   - 默认：滚动条全部隐藏（滚动仍可用，只是不显示）
-   - .cb-longcode-scrolling（垂直滚动中）→ 垂直滚动条出现
-   - .cb-longcode-at-bottom（悬停底部边框）→ 水平滚动条出现
+/* 折叠态滚动条显隐（重构设计）：
+   - 默认：两个滚动条都隐藏（滚动仍可用，只是不显示）
+   - .cb-longcode-scrolling（滚动中）→ 两个滚动条都出现
+   - .cb-longcode-hover-v（悬停右侧边缘）→ 垂直滚动条出现
+   - .cb-longcode-hover-h（悬停底部边缘）→ 水平滚动条出现
    注意：scrollbar-width 无法分别控制横/纵，用 webkit 伪元素精确控制。 */
 .code-block.cb-beautified.cb-longcode-folded .hljs {
   scrollbar-width: none; /* Firefox：隐藏（滚动仍可用） */
@@ -270,24 +271,36 @@
   height: 0;
 }
 
-/* 垂直滚动中：垂直条出现（水平条保持隐藏） */
+/* 滚动中：横纵都出现 */
 .code-block.cb-beautified.cb-longcode-folded.cb-longcode-scrolling .hljs {
   scrollbar-width: thin;
 }
 
 .code-block.cb-beautified.cb-longcode-folded.cb-longcode-scrolling .hljs::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
+}
+
+/* 悬停右侧边缘：垂直条出现（水平条隐藏） */
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-hover-v .hljs::-webkit-scrollbar {
+  width: 6px;
   height: 0;
 }
 
-/* 悬停底部边框：水平条出现（垂直条保持隐藏） */
-.code-block.cb-beautified.cb-longcode-folded.cb-longcode-at-bottom .hljs::-webkit-scrollbar {
+/* 悬停底部边缘：水平条出现（垂直条隐藏） */
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-hover-h .hljs::-webkit-scrollbar {
   width: 0;
   height: 6px;
 }
 
-/* 垂直滚动 + 悬停底部同时：横纵都出现（webkit 覆盖） */
-.code-block.cb-beautified.cb-longcode-folded.cb-longcode-scrolling.cb-longcode-at-bottom .hljs::-webkit-scrollbar {
+/* 悬停右缘 + 底缘同时：横纵都出现 */
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-hover-v.cb-longcode-hover-h .hljs::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+/* 滚动中 + 悬停边缘：保持横纵出现（scrolling 优先级更高） */
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-scrolling .hljs::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
