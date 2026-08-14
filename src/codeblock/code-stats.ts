@@ -1,13 +1,11 @@
-/**
+/** 
  * 代码统计角标：代码块底部右下角显示行数 / 字符数。
  * 低透明度、pointer-events none，不影响滚动与交互。
  */
 import { getCodeText } from "../utils/dom"
 import { getOverlay } from "../utils/overlay"
 import { countVisibleLines } from "../utils/text-range"
-import {
-  registerDecor,
-} from "./registry"
+import { registerDecor } from "./registry"
 
 /** 统计角标类名 */
 const STATS_CLASS = "cb-stats-badge"
@@ -23,8 +21,11 @@ function updateStats(codeBlock: HTMLElement) {
     return
   }
   const text = getCodeText(hljs)
+  //行数
   const lines = countVisibleLines(text)
+  //字符数
   const chars = text.length
+  //更新角标内容
   badge.textContent = `${lines} 行 · ${chars} 字符`
 }
 
@@ -61,6 +62,7 @@ function removeCodeStats(codeBlock: HTMLElement) {
   getOverlay(codeBlock).querySelector(`.${STATS_CLASS}`)?.remove()
 }
 
+// 注册装饰器：代码统计角标
 registerDecor({
   selfSelector: ".cb-stats-badge",
   enhance: ({
