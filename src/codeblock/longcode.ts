@@ -208,6 +208,8 @@ function ensureScrollFade(codeBlock: HTMLElement) {
     b?.classList.add(BTN_SCROLLING_CLASS)
     // 垂直滚动中 → 显示垂直滚动条（CSS：cb-scrolling 恢复 scrollbar-width）
     codeBlock.classList.add(SCROLLING_CLASS)
+    // 滚动中不显示水平条（滚到底部≠悬停底部）；停止后由 mousemove 重新判定
+    codeBlock.classList.remove(AT_BOTTOM_CLASS)
     window.clearTimeout(fadeTimer)
     fadeTimer = window.setTimeout(() => {
       bar?.classList.remove(BAR_SCROLLING_CLASS)
