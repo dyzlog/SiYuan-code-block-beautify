@@ -256,6 +256,42 @@
   }
 }
 
+/* 折叠态滚动条显隐：
+   - 默认：滚动条全部隐藏（滚动仍可用，只是不显示）
+   - .cb-longcode-scrolling（垂直滚动中）→ 垂直滚动条出现
+   - .cb-longcode-at-bottom（悬停底部边框）→ 水平滚动条出现
+   注意：scrollbar-width 无法分别控制横/纵，用 webkit 伪元素精确控制。 */
+.code-block.cb-beautified.cb-longcode-folded .hljs {
+  scrollbar-width: none; /* Firefox：隐藏（滚动仍可用） */
+}
+
+.code-block.cb-beautified.cb-longcode-folded .hljs::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* 垂直滚动中：垂直条出现（水平条保持隐藏） */
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-scrolling .hljs {
+  scrollbar-width: thin;
+}
+
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-scrolling .hljs::-webkit-scrollbar {
+  width: 6px;
+  height: 0;
+}
+
+/* 悬停底部边框：水平条出现（垂直条保持隐藏） */
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-at-bottom .hljs::-webkit-scrollbar {
+  width: 0;
+  height: 6px;
+}
+
+/* 垂直滚动 + 悬停底部同时：横纵都出现（webkit 覆盖） */
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-scrolling.cb-longcode-at-bottom .hljs::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
 
 /* 思源原生右上角工具（语言/复制/更多）悬浮显示，不被装饰栏遮挡 */
 
