@@ -253,6 +253,9 @@
           <option value="graph">
             小方格纸
           </option>
+          <option value="sticky">
+            便利贴（柠檬黄）
+          </option>
         </select>
         <span class="cb-setting__hint">低透明度装饰，不影响代码阅读</span>
       </div>
@@ -360,6 +363,20 @@
         >
         <span class="cb-setting__value">{{ form.longCodeThreshold }} 行</span>
       </div>
+      <div
+        v-if="form.longCodeFold"
+        class="cb-setting__item fn__flex"
+      >
+        <span class="cb-setting__label">隐藏按钮</span>
+        <label class="fn__flex">
+          <input
+            v-model="form.hideFoldButton"
+            type="checkbox"
+            class="b3-switch fn__flex-center"
+          >
+        </label>
+        <span class="cb-setting__hint">按钮默认隐藏，鼠标移到按钮位置时显示</span>
+      </div>
 
       <div class="fn__hr"></div>
 
@@ -406,6 +423,28 @@
             代码符号
           </option>
         </select>
+      </div>
+      <div class="cb-setting__item fn__flex">
+        <span class="cb-setting__label">强制兼容主题</span>
+        <label class="fn__flex">
+          <input
+            v-model="form.forceThemeCompat"
+            type="checkbox"
+            class="b3-switch fn__flex-center"
+          >
+        </label>
+        <span class="cb-setting__hint">语言标记移至右侧与复制/更多并排，装饰栏在所有主题下均显示</span>
+      </div>
+      <div class="cb-setting__item fn__flex">
+        <span class="cb-setting__label">隐藏头部工具</span>
+        <label class="fn__flex">
+          <input
+            v-model="form.hideActionTools"
+            type="checkbox"
+            class="b3-switch fn__flex-center"
+          >
+        </label>
+        <span class="cb-setting__hint">隐藏代码块头部栏的语言标记、复制、更多按钮</span>
       </div>
     </template>
 
@@ -657,6 +696,11 @@ const save = () => {
 
 .cb-setting__url-row {
   gap: 8px;
+}
+
+.cb-setting__url-hint {
+  margin: 2px 0 8px;
+  text-align: left;
 }
 
 /* 已上传背景图片下拉列表 */

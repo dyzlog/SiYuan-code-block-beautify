@@ -44,8 +44,10 @@ export function createEl<K extends keyof HTMLElementTagNameMap>(
   if (options?.className) {
     const classes = Array.isArray(options.className)
       ? options.className
-      : [options.className]
-    el.classList.add(...classes)
+      : options.className.split(/\s+/).filter(Boolean)
+    if (classes.length) {
+      el.classList.add(...classes)
+    }
   }
 
   if (options?.textContent) {

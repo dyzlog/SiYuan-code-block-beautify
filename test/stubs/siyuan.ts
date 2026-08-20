@@ -10,6 +10,18 @@ export class Plugin {
     on: () => {},
     off: () => {},
   }
+
+  /** 插件数据存储（内存模拟，供 loadData/saveData 测试） */
+  private storage: Record<string, unknown> = {}
+
+  public loadData<T>(name: string): Promise<T | null> {
+    return Promise.resolve((this.storage[name] as T) ?? null)
+  }
+
+  public saveData(name: string, data: unknown): Promise<void> {
+    this.storage[name] = data
+    return Promise.resolve()
+  }
 }
 export class Dialog {
   public element: HTMLElement = document.createElement("div")

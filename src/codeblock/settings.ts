@@ -40,6 +40,12 @@ export interface CodeBlockSettings {
   themeStyleEnabled: boolean
   /** 顶部栏主题风格（"" = 无，"mac" = Mac 风格圆点） */
   themeStyle: string
+  /** 折叠/展开按钮隐藏开关（true = 按钮默认隐藏，鼠标移到按钮位置才显示） */
+  hideFoldButton: boolean
+  /** 强制兼容主题模式（true = 语言标记移至右侧与复制/更多并排，装饰栏强制显示） */
+  forceThemeCompat: boolean
+  /** 隐藏代码块头部栏的语言标记/复制/更多按钮 */
+  hideActionTools: boolean
 }
 
 export const DEFAULT_SETTINGS: CodeBlockSettings = {
@@ -61,6 +67,9 @@ export const DEFAULT_SETTINGS: CodeBlockSettings = {
   longCodeThreshold: 20,
   themeStyleEnabled: true,
   themeStyle: "mac",
+  hideFoldButton: false,
+  forceThemeCompat: false,
+  hideActionTools: false,
 }
 
 /** 将已保存的数据与默认值合并，兼容缺失字段与旧版本布尔开关数据 */

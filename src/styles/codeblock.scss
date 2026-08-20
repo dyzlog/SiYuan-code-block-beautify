@@ -200,10 +200,13 @@
 
 }
 
-/* 底部「收起/展开」按钮 */
+/* 底部「收起/展开」按钮。
+   bottom 需大于滚动条轨道高度（6px）+ 间隙：水平滚动条（折叠/展开态均可出现）
+   占代码块底部 6px，若按钮 bottom 仅为 6px 则按钮下边缘恰好顶在滚动条轨道
+   顶部、边框与 thumb 重叠——上移到滚动条上方并留出 6px 间隙。 */
 .cb-longcode-btn {
   position: absolute;
-  bottom: 6px;
+  bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 3;
@@ -230,6 +233,47 @@
   &--scrolling {
     opacity: 0.2;
   }
+
+  /* 按钮隐藏开关（hideFoldButton）：默认隐藏，悬停按钮位置时由 JS 加 visible 显示。
+     规则顺序保证：隐藏中滚动保持隐藏（--hidden 覆盖 --scrolling）；
+     悬停显示优先于滚动虚化（--hidden--visible 特异性更高）。 */
+  &--hidden {
+    opacity: 0;
+  }
+
+  &--hidden.cb-longcode-btn--visible {
+    opacity: 1;
+  }
+}
+
+/* ---------------- 强制兼容主题模式 ---------------- */
+
+/* 语言标记默认在代码块左上角（思源内置 .protyle-action 为 absolute+flex，
+   语言在最左、复制/更多在最右），与左上角装饰栏重叠。开启「强制兼容主题」后：
+   - 隐藏中间弹性占位，操作栏整体靠右（justify-content: flex-end）
+   - 语言标记 order 排到最后 → 视觉顺序 [复制][更多][语言]，与复制/更多并排
+   用 !important 覆盖主题对 .protyle-action 的自定义布局（本模式即「插件覆盖主题」）。 */
+.code-block.cb-theme-compat .protyle-action {
+  display: flex !important;
+  justify-content: flex-end !important;
+}
+
+.code-block.cb-theme-compat .protyle-action .fn__flex-1 {
+  display: none !important;
+}
+
+.code-block.cb-theme-compat .protyle-action__language {
+  order: 3 !important;
+}
+
+/* ---------------- 隐藏头部工具 ---------------- */
+
+/* 隐藏代码块头部栏的语言标记、复制、更多按钮（设置项「隐藏头部工具」）。
+   仅隐藏这三个元素，.protyle-action 容器保留（不影响代码块其他交互）。 */
+.code-block.cb-hide-action .protyle-action__language,
+.code-block.cb-hide-action .protyle-action__copy,
+.code-block.cb-hide-action .protyle-action__menu {
+  display: none !important;
 }
 
 /* 代码块内部滚动条：细淡样式（滚动预览时可见可拖，不占大空间） */
@@ -256,53 +300,101 @@
   }
 }
 
-/* 折叠态滚动条显隐（重构设计）：
-   - 默认：两个滚动条都隐藏（滚动仍可用，只是不显示）
-   - .cb-longcode-scrolling（滚动中）→ 两个滚动条都出现
-   - .cb-longcode-hover-v（悬停右侧边缘）→ 垂直滚动条出现
-   - .cb-longcode-hover-h（悬停底部边缘）→ 水平滚动条出现
-   注意：scrollbar-width 无法分别控制横/纵，用 webkit 伪元素精确控制。 */
+/* 折叠态滚动条显隐（重构设计 v2）：
+   - 布局稳定：滚动条尺寸恒定（6px），显隐只切换 thumb 颜色——
+     不改变 clientWidth/clientHeight。若尺寸在 0↔6px 间切换，滚动到底部时
+     「隐藏→水平条消失→clientHeight 变大→scrollTop 超界被钳制→scroll 事件
+     →重新显示→…」会形成振荡循环（滚动条永不隐藏 + 按钮虚化反复闪烁）。
+   - 默认：thumb 透明（滚动条不可见，滚动仍可用）
+   - .cb-longcode-scrolling（滚动中）→ 两条 thumb 都出现
+   - .cb-longcode-hover-v（悬停右侧边缘）→ 垂直 thumb 出现
+   - .cb-longcode-hover-h（悬停底部边缘）→ 水平 thumb 出现
+   浏览器兼容要点：
+   - Chromium 中 ::-webkit-scrollbar 任一维度为 0 会把两条滚动条都隐藏
+     （width:6px;height:0 时垂直条也不渲染），故不能用 0 维度控制显隐。
+   - Chromium 121+ 的 scrollbar-width/scrollbar-color 优先于 ::-webkit-scrollbar
+     伪元素样式（thumb 颜色、尺寸以标准属性为准）——因此同时用两套规则控制：
+     旧版 Chromium 走 webkit 伪元素，新版走 scrollbar-color。
+   - scrollbar-color 只能同时设置横/纵 thumb 颜色，无法按轴区分——
+     悬停时两条 thumb 一起出现（6px 细条，视觉无碍）。
+   - scrollbar-width:none 仅对 Firefox 生效（@supports 探测，Chromium 不命中），
+     否则会覆盖 webkit 尺寸规则、滚动条永远无法按状态显示。 */
+@supports (-moz-appearance: none) {
+  .code-block.cb-beautified.cb-longcode-folded .hljs {
+    scrollbar-width: none; /* Firefox：隐藏（滚动仍可用） */
+  }
+}
+
+/* 新版 Chromium（121+）：scrollbar-color 控制 thumb 颜色（默认透明） */
 .code-block.cb-beautified.cb-longcode-folded .hljs {
-  scrollbar-width: none; /* Firefox：隐藏（滚动仍可用） */
+  scrollbar-color: transparent transparent;
 }
 
 .code-block.cb-beautified.cb-longcode-folded .hljs::-webkit-scrollbar {
-  width: 0;
-  height: 0;
+  width: 6px;
+  height: 6px;
 }
 
-/* 滚动中：横纵都出现 */
+/* 旧版 Chromium：webkit 伪元素控制 thumb 颜色（默认透明） */
+.code-block.cb-beautified.cb-longcode-folded .hljs::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+
+/* 滚动中：两条 thumb 都出现 */
 .code-block.cb-beautified.cb-longcode-folded.cb-longcode-scrolling .hljs {
-  scrollbar-width: thin;
+  scrollbar-color: rgba(127, 127, 127, 0.35) transparent;
 }
 
-.code-block.cb-beautified.cb-longcode-folded.cb-longcode-scrolling .hljs::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-scrolling .hljs::-webkit-scrollbar-thumb {
+  background-color: rgba(127, 127, 127, 0.35);
 }
 
-/* 悬停右侧边缘：垂直条出现（水平条隐藏） */
-.code-block.cb-beautified.cb-longcode-folded.cb-longcode-hover-v .hljs::-webkit-scrollbar {
-  width: 6px;
-  height: 0;
+/* 悬停右侧 / 底部边缘：thumb 出现（scrollbar-color 横纵同现；webkit 按轴区分） */
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-hover-v .hljs,
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-hover-h .hljs {
+  scrollbar-color: rgba(127, 127, 127, 0.35) transparent;
 }
 
-/* 悬停底部边缘：水平条出现（垂直条隐藏） */
-.code-block.cb-beautified.cb-longcode-folded.cb-longcode-hover-h .hljs::-webkit-scrollbar {
-  width: 0;
-  height: 6px;
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-hover-v .hljs::-webkit-scrollbar-thumb:vertical,
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-hover-h .hljs::-webkit-scrollbar-thumb:horizontal {
+  background-color: rgba(127, 127, 127, 0.35);
 }
 
-/* 悬停右缘 + 底缘同时：横纵都出现 */
-.code-block.cb-beautified.cb-longcode-folded.cb-longcode-hover-v.cb-longcode-hover-h .hljs::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* thumb 悬停加深（旧版 Chromium 生效；新版由 scrollbar-color 接管） */
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-scrolling .hljs::-webkit-scrollbar-thumb:hover,
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-hover-v .hljs::-webkit-scrollbar-thumb:vertical:hover,
+.code-block.cb-beautified.cb-longcode-folded.cb-longcode-hover-h .hljs::-webkit-scrollbar-thumb:horizontal:hover {
+  background-color: rgba(127, 127, 127, 0.55);
 }
 
-/* 滚动中 + 悬停边缘：保持横纵出现（scrolling 优先级更高） */
-.code-block.cb-beautified.cb-longcode-folded.cb-longcode-scrolling .hljs::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* 未折叠（展开）长代码：水平滚动条与折叠态同款交互——默认隐藏、
+   悬停底部边缘 / 滚动中出现。未折叠态代码完整显示（无内部垂直滚动），
+   显式 overflow-x:auto 保证长行可水平滚动（思源主题可能未设置 overflow）。
+   垂直方向无溢出故无垂直滚动条，hover-v/scrolling 的垂直规则无渲染对象。 */
+.code-block.cb-beautified.cb-longcode-expanded .hljs {
+  overflow-x: auto;
+  scrollbar-color: transparent transparent; /* 默认：thumb 透明（隐藏） */
+}
+
+.code-block.cb-beautified.cb-longcode-expanded .hljs::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+
+/* 悬停底部边缘 / 滚动中：水平 thumb 出现 */
+.code-block.cb-beautified.cb-longcode-expanded.cb-longcode-hover-h .hljs,
+.code-block.cb-beautified.cb-longcode-expanded.cb-longcode-scrolling .hljs {
+  scrollbar-color: rgba(127, 127, 127, 0.35) transparent;
+}
+
+.code-block.cb-beautified.cb-longcode-expanded.cb-longcode-hover-h .hljs::-webkit-scrollbar-thumb:horizontal,
+.code-block.cb-beautified.cb-longcode-expanded.cb-longcode-scrolling .hljs::-webkit-scrollbar-thumb {
+  background-color: rgba(127, 127, 127, 0.35);
+}
+
+/* thumb 悬停加深（旧版 Chromium） */
+.code-block.cb-beautified.cb-longcode-expanded.cb-longcode-hover-h .hljs::-webkit-scrollbar-thumb:horizontal:hover,
+.code-block.cb-beautified.cb-longcode-expanded.cb-longcode-scrolling .hljs::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(127, 127, 127, 0.55);
 }
 
 
@@ -325,93 +417,6 @@
   opacity: 0.35;
   pointer-events: none;
   user-select: none;
-}
-
-/* ---------------- 设置面板 ---------------- */
-.cb-setting__title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--b3-theme-primary);
-  margin: 16px 0 8px;
-  padding-left: 8px;
-  border-left: 3px solid var(--b3-theme-primary);
-  line-height: 1.4;
-  letter-spacing: 0.5px;
-}
-
-.cb-setting__item {
-  min-height: 32px;
-  margin-bottom: 10px;
-  gap: 10px;
-  align-items: center;
-}
-
-.cb-setting__label {
-  min-width: 110px;
-  flex-shrink: 0;
-  font-size: 13px;
-  color: var(--b3-theme-on-surface);
-}
-
-.cb-setting__hint {
-  font-size: 12px;
-  color: var(--b3-theme-on-surface-light);
-  margin-left: auto;
-  text-align: right;
-  flex-shrink: 1;
-}
-
-.cb-setting__value {
-  min-width: 40px;
-  font-size: 12px;
-  color: var(--b3-theme-on-surface);
-  text-align: right;
-}
-
-.cb-setting__slider {
-  flex: 1;
-  min-width: 120px;
-}
-
-.cb-setting__select {
-  max-width: 240px;
-}
-
-.cb-setting__color {
-  width: 40px;
-  height: 28px;
-  padding: 2px;
-  border-radius: 4px;
-}
-
-.cb-setting__url-row {
-  align-items: center;
-  gap: 8px;
-}
-
-.cb-setting__url {
-  flex: 1;
-  min-width: 0;
-}
-
-.cb-setting__url-hint {
-  margin: 2px 0 8px;
-  text-align: left;
-}
-
-.cb-setting__actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
-  padding: 10px 0 4px;
-  background-color: var(--b3-dialog-background, var(--b3-theme-background));
-  border-top: 1px solid var(--b3-border-color);
-  margin-top: 8px;
-  gap: 8px;
-}
-
-.cb-setting__reset {
-  margin-right: auto;
 }
 
 /* 拖选覆盖：思源拖选代码文本时给代码块加 .protyle-wysiwyg--select（块选中背景高亮）。

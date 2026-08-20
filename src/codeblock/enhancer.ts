@@ -29,7 +29,7 @@ import {
 // 装饰模块（副作用：各自 registerDecor 注册，供 enhanceAll 调用）——
 // 必须显式 import，否则 Vite tree-shake 会移除未引用的模块，导致对应功能失效
 import "./code-stats"
-import "./longcode"
+import { removeFoldState } from "./longcode"
 import "./selection-guard"
 
 const CODE_BLOCK_SELECTOR = ".code-block"
@@ -40,6 +40,10 @@ const SCAN_DEBOUNCE_MS = 300
 const ELEMENT_NODE = 1
 
 const BEAUTIFIED_CLASS = "cb-beautified"
+/** 强制兼容主题模式 class：语言标记移至右侧（CSS 控制），避免与左上角装饰栏重叠 */
+const THEME_COMPAT_CLASS = "cb-theme-compat"
+/** 隐藏头部工具 class：隐藏代码块头部栏的语言标记/复制/更多 */
+const ACTION_HIDDEN_CLASS = "cb-hide-action"
 
 let plugin: Plugin | null = null
 let settings: CodeBlockSettings | null = null
@@ -109,6 +113,8 @@ export function initCodeBlockEnhancer(p: Plugin, s: CodeBlockSettings) {
           : Array.from(el.querySelectorAll(CODE_BLOCK_SELECTOR))
         for (const block of removed) {
           removeOverlay(block as HTMLElement)
+          // 同步清理跨会话折叠状态残留（块删除后持久化表不无限增长）
+          removeFoldState(block as HTMLElement)
         }
       }
       for (const node of m.addedNodes) {
@@ -222,7 +228,7 @@ function scan(scope: "pending" | "all" = "all") {
   pendingBlocks.clear()
   // 兜底：清理与代码块失联的孤儿 overlay（removedNodes 已做清理，这里是最后防线，
   // 覆盖代码块被移动/替换等 MutationObserver 未捕获的边角场景）
-  // overlay 插在 .protyle-wysiwyg 最前面（data-cb-owner 记录所属代码块 id），
+  // overlay 挂在滚动容器 .protyle-content 下（data-cb-owner 记录所属代码块 id），
   // 无法用兄弟关系判断归属——校验所属代码块是否仍在文档中
   document.querySelectorAll<HTMLElement>(".cb-overlay").forEach((ov) => {
     const ownerId = ov.getAttribute("data-cb-owner")
@@ -316,7 +322,7 @@ function verify(codeBlock: HTMLElement) {
   if (!settings) {
     return
   }
-  // overlay 插在 .protyle-wysiwyg 最前面（data-cb-owner 记录所属代码块 id）。
+  // overlay 挂在滚动容器 .protyle-content 下（data-cb-owner 记录所属代码块 id）。
   // 思源重渲染若移除了它，需重新增强。
   const ownerId = codeBlock.getAttribute("data-node-id")
   const ov = ownerId
@@ -336,6 +342,11 @@ function enhance(codeBlock: HTMLElement) {
   }
   codeBlock.dataset.cbEnhanced = ENHANCED_VALUE
   codeBlock.classList.add(BEAUTIFIED_CLASS)
+  // 强制兼容主题模式：语言标记移至右侧（CSS 重排 .protyle-action），
+  // 装饰栏左上角不再与语言标记重叠
+  codeBlock.classList.toggle(THEME_COMPAT_CLASS, settings.forceThemeCompat)
+  // 隐藏头部工具：隐藏语言标记/复制/更多按钮（CSS 控制）
+  codeBlock.classList.toggle(ACTION_HIDDEN_CLASS, settings.hideActionTools)
   // 应用边框样式 class（滚动刷新后新增强的块也带上当前边框样式）
   applyBorderStyleClass(codeBlock, settings.borderStyle)
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
@@ -391,7 +402,7 @@ function enhance(codeBlock: HTMLElement) {
  */
 function clearEnhancements(preserveLongCode = true) {
   document.querySelectorAll<HTMLElement>(`.code-block.${BEAUTIFIED_CLASS}`).forEach((block) => {
-    block.classList.remove(BEAUTIFIED_CLASS, ...TEXTURE_CLASSES)
+    block.classList.remove(BEAUTIFIED_CLASS, THEME_COMPAT_CLASS, ACTION_HIDDEN_CLASS, ...TEXTURE_CLASSES)
     delete block.dataset.cbEnhanced
     // 装饰清理（注册表统一：当前行/统计角标/长代码条/背景纹理）
     cleanupAll(block, preserveLongCode)

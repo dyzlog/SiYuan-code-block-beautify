@@ -13,6 +13,7 @@ import {
   initCodeBlockEnhancer,
   updateSettings,
 } from "@/codeblock/enhancer"
+import { initFoldPersistence } from "@/codeblock/longcode"
 import {
   applyHighlightTheme,
   applyThemeStyleClass,
@@ -59,17 +60,20 @@ export default class CodeBlockBeautify extends Plugin {
   }
 
   onLayoutReady() {
-    this.loadData(STORAGE_NAME)
+    // 并行加载设置与跨会话折叠状态；全部就绪后重扫一次，
+    // 让已增强的代码块按持久化状态恢复折叠（重开思源保持上次状态）
+    const settingsLoaded = this.loadData(STORAGE_NAME)
       .then((data) => {
         if (data) {
           this.settings = mergeSettings(data)
           this.applyAllSettings(this.settings)
-          updateSettings(this.settings)
         }
       })
       .catch((e) => {
         console.warn('load settings failed, use defaults', e)
       })
+    Promise.all([settingsLoaded, initFoldPersistence(this)])
+      .then(() => updateSettings(this.settings))
   }
 
   onunload() {

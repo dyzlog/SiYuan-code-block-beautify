@@ -34,7 +34,7 @@ function makeRect(left: number, top: number, width: number, height: number): DOM
   } as DOMRect
 }
 
-function buildEditor(): { code: HTMLElement; ov: HTMLElement; wysiwyg: HTMLElement } {
+function buildEditor(): { code: HTMLElement; ov: HTMLElement; wysiwyg: HTMLElement; content: HTMLElement } {
   const protyle = document.createElement("div")
   protyle.className = "protyle"
   protyle.style.position = "relative"
@@ -63,26 +63,28 @@ function buildEditor(): { code: HTMLElement; ov: HTMLElement; wysiwyg: HTMLEleme
   code.getBoundingClientRect = () => makeRect(100, 200, 400, 120)
 
   const ov = getOverlay(code)
-  return { code, ov, wysiwyg }
+  return { code, ov, wysiwyg, content }
 }
 
-describe("overlay 兄弟节点定位", () => {
-  it("overlay 是 codeBlock 的兄弟节点且插在 wysiwyg 最前面（防污染 + 避开遍历）", () => {
-    const { code, ov, wysiwyg } = buildEditor()
-    // 不在 codeBlock 内部 → 思源 outerHTML 序列化不会带走它（防污染）
+describe("overlay 挂载与定位", () => {
+  it("overlay 挂在滚动容器 .protyle-content 下，不在 codeBlock 内部也不在 wysiwyg 文档内容容器内（防序列化污染）", () => {
+    const { code, ov, wysiwyg, content } = buildEditor()
+    // 不在 codeBlock 内部 → 思源序列化代码块不会带走它
     expect(code.contains(ov)).toBe(false)
-    // 与 codeBlock 同父（wysiwyg），插在 codeBlock 之前（避开向后遍历）
-    expect(ov.parentElement).toBe(wysiwyg)
-    expect(ov.nextElementSibling).toBe(code)
+    // 不在 .protyle-wysiwyg（文档内容容器）内 → 思源整篇序列化不会把它当
+    // HTML 块写入文档（实测污染根因：overlay 在 wysiwyg 内会被存成 NodeHTMLBlock）
+    expect(wysiwyg.contains(ov)).toBe(false)
+    // 挂在滚动容器下（与代码块同滚动容器，随内容移动）
+    expect(ov.parentElement).toBe(content)
     document.body.innerHTML = ""
   })
 
-  it("overlay 在 codeBlock 之前（兄弟），父容器获得 position: relative（定位基础）", () => {
-    const { code, ov, wysiwyg } = buildEditor()
-    // 在 codeBlock 之前（思源块框选从 codeBlock 向后遍历，不经过它）
-    expect(ov.nextElementSibling).toBe(code)
-    // 父容器 position: relative（overlay absolute 定位的 offsetParent 基础）
-    expect(wysiwyg.style.position).toBe("relative")
+  it("滚动容器获得 position: relative（overlay 的 offsetParent 落在滚动容器内，滚动时随内容移动）", () => {
+    const { content } = buildEditor()
+    // overlay 的 offsetParent 必须是滚动容器：absolute 定位相对容器内容坐标，
+    // 滚动时 overlay 才随代码块一起移动（否则 offsetParent 是外层 .protyle 时
+    // overlay 不随容器滚动，位置错位）
+    expect(content.style.position).toBe("relative")
     document.body.innerHTML = ""
   })
 

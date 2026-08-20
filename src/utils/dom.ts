@@ -2,7 +2,8 @@
  * 代码块美化插件 - 公共 DOM 能力检测
  */
 
-/** 代码块增强标记（dataset.cbEnhanced 的值） */export const ENHANCED_VALUE = "1"
+/** 代码块增强标记（dataset.cbEnhanced 的值） */
+export const ENHANCED_VALUE = "1"
 
 /**
  * 读取代码块 .hljs 的纯文本（空值兜底）。
