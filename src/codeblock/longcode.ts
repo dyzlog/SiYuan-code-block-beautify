@@ -5,12 +5,20 @@
  * 点击后代码块只显示前 N 行，按钮变为「展开」；展开后可滚动预览全部内容。
  * 不修改 .hljs 内容，仅通过 max-height 控制显示。
  *
- * 折叠状态持久化在 .code-block 的 data 属性上：设置保存/重渲染后折叠状态保持，
+ * 折叠状态两层持久化：
+ * - 运行时：.code-block 的 data 属性（设置保存/重渲染/滚动后状态保持）
+ * - 跨会话：插件数据目录 saveData/loadData（重开思源/文档后恢复上次折叠状态）
  * 固定行数（阈值）变化时自动用新阈值重新计算高度。
  */
 
+import type { Plugin } from "siyuan"
 import type { CodeBlockSettings } from "./settings"
+import { ControllerManager } from "../utils/controller-manager"
 import { getCodeText } from "../utils/dom"
+import {
+  createEl,
+  removeAll,
+} from "../utils/dom-helpers"
 import { getOverlay } from "../utils/overlay"
 import { countVisibleLines } from "../utils/text-range"
 import { measureLineAt } from "./line-measure-service"
@@ -22,12 +30,25 @@ const BAR_CLASS = "cb-longcode-bar"
 const BAR_SCROLLING_CLASS = "cb-longcode-bar--scrolling"
 const BTN_CLASS = "cb-longcode-btn"
 const BTN_SCROLLING_CLASS = "cb-longcode-btn--scrolling"
+/** 按钮隐藏开关：默认隐藏（悬停按钮位置时由 mousemove 加 visible 显示） */
+const BTN_HIDDEN_CLASS = "cb-longcode-btn--hidden"
+const BTN_VISIBLE_CLASS = "cb-longcode-btn--visible"
 const DOTS_CLASS = "cb-longcode-dots"
 const WIN_CLASS = "cb-longcode-win"
 const CHROME_CLASS = "cb-longcode-chrome"
 const TERMINAL_CLASS = "cb-longcode-terminal"
 const CODESYM_CLASS = "cb-longcode-codesym"
 const FOLDED_ATTR = "cbLongFolded"
+/** 折叠状态 class（CSS 控制滚动条显隐的挂载点） */
+const FOLDED_CLASS = "cb-longcode-folded"
+/** 未折叠（展开）长代码 class：水平滚动条同样「默认隐藏、悬停底部边缘出现」 */
+const EXPANDED_CLASS = "cb-longcode-expanded"
+/** 垂直滚动中 class（显示两个滚动条） */
+const SCROLLING_CLASS = "cb-longcode-scrolling"
+/** 悬停右侧边缘 class（显示垂直滚动条） */
+const HOVER_V_CLASS = "cb-longcode-hover-v"
+/** 悬停底部边缘 class（显示水平滚动条） */
+const HOVER_H_CLASS = "cb-longcode-hover-h"
 
 interface LongCodeFoldState {
   /** 折叠时的固定高度（px） */
@@ -39,6 +60,83 @@ interface LongCodeFoldState {
 /** 折叠高度缓存（同一阈值内稳定，避免滚动/重渲染测量抖动） */
 const foldStates = new WeakMap<HTMLElement, LongCodeFoldState>()
 
+/**
+ * 折叠状态跨会话持久化：存插件数据目录（saveData/loadData）。
+ * 思源重新打开文档/重启后 DOM 重建，运行时 data 属性丢失——用 blockId
+ * 维度记录折叠状态，重开思源后恢复，保持「上次离开时的折叠状态」。
+ * 不写文档数据（不污染 undo/保存），仅存插件私有存储。
+ */
+const FOLD_STORAGE_NAME = "foldStates"
+/** 持久化用插件实例（initFoldPersistence 注入） */
+let persistPlugin: Plugin | null = null
+/** 已加载的折叠状态表：blockId → true（折叠） */
+let foldStatesMap: Record<string, boolean> = {}
+/** 磁盘状态是否已加载（加载完成前只记内存，避免覆盖磁盘数据） */
+let foldStatesLoaded = false
+
+/**
+ * 初始化折叠状态持久化：注入插件实例并加载上次会话保存的折叠状态。
+ * 返回 Promise，完成后 resolve（入口据此触发全量重扫，恢复已增强块的折叠态）。
+ */
+export function initFoldPersistence(p: Plugin): Promise<void> {
+  persistPlugin = p
+  return p.loadData(FOLD_STORAGE_NAME)
+    .then((data) => {
+      const loaded = (data && typeof data === "object")
+        ? data as Record<string, boolean>
+        : {}
+      // 合并：加载完成前本会话已折叠的块优先（用户操作不丢失）
+      foldStatesMap = { ...loaded, ...foldStatesMap }
+      foldStatesLoaded = true
+    })
+    .catch(() => {
+      foldStatesLoaded = true
+    })
+}
+
+/** 读取持久化的折叠状态（思源块 id 全局唯一，跨文档独立） */
+function getPersistedFoldState(codeBlock: HTMLElement): boolean {
+  const id = codeBlock.getAttribute("data-node-id")
+  return id ? foldStatesMap[id] === true : false
+}
+
+/** 持久化折叠状态：更新内存表并写盘（加载完成前只记内存） */
+function persistFoldState(codeBlock: HTMLElement, folded: boolean) {
+  if (!persistPlugin) {
+    return
+  }
+  const id = codeBlock.getAttribute("data-node-id")
+  if (!id) {
+    return
+  }
+  if (folded) {
+    foldStatesMap[id] = true
+  } else {
+    delete foldStatesMap[id]
+  }
+  if (foldStatesLoaded) {
+    persistPlugin.saveData(FOLD_STORAGE_NAME, foldStatesMap)
+      .catch((e) => console.warn("[code-block-beautify] save fold state failed", e))
+  }
+}
+
+/**
+ * 代码块被移除时清理其跨会话折叠状态（防持久化表无限增长）。
+ * 由 enhancer 在 removedNodes 清理时调用；块 id 全局唯一且不复用，删除即清。
+ */
+export function removeFoldState(codeBlock: HTMLElement): void {
+  if (!persistPlugin || !foldStatesLoaded) {
+    return
+  }
+  const id = codeBlock.getAttribute("data-node-id")
+  if (!id || !foldStatesMap[id]) {
+    return
+  }
+  delete foldStatesMap[id]
+  persistPlugin.saveData(FOLD_STORAGE_NAME, foldStatesMap)
+    .catch((e) => console.warn("[code-block-beautify] save fold state failed", e))
+}
+
 function applyFold(codeBlock: HTMLElement, folded: boolean, topNHeight: number) {
   const hljs = codeBlock.querySelector<HTMLElement>(".hljs")
   // 只给 .hljs 限高（内容溢出触发内部滚动预览），.code-block 不设 max-height，
@@ -46,15 +144,17 @@ function applyFold(codeBlock: HTMLElement, folded: boolean, topNHeight: number) 
   if (hljs) {
     hljs.style.maxHeight = folded && topNHeight > 0 ? `${topNHeight}px` : ""
   }
+  // 折叠 class：CSS 据此控制滚动条显隐（默认隐藏，滚动/悬停底部时出现）
+  codeBlock.classList.toggle(FOLDED_CLASS, folded)
 }
 
 function updateBtn(btn: HTMLButtonElement, folded: boolean) {
   btn.textContent = folded ? "展开" : "收起"
 }
 
-/** 当前是否折叠（data 属性持久化） */
+/** 当前是否折叠（运行时 data 属性 + 跨会话持久化状态） */
 function isFolded(codeBlock: HTMLElement): boolean {
-  return codeBlock.dataset[FOLDED_ATTR] === "1"
+  return codeBlock.dataset[FOLDED_ATTR] === "1" || getPersistedFoldState(codeBlock)
 }
 
 /**
@@ -92,11 +192,9 @@ function resolveFoldHeight(codeBlock: HTMLElement, threshold: number, topNHeight
 
 /** 在顶部栏左侧追加一组圆点 */
 function appendDots(bar: HTMLElement, dotClasses: string[]) {
-  const dots = document.createElement("div")
-  dots.className = DOTS_CLASS
+  const dots = createEl("div", { className: DOTS_CLASS })
   for (const cls of dotClasses) {
-    const dot = document.createElement("span")
-    dot.className = `cb-longcode-dot ${cls}`
+    const dot = createEl("span", { className: `cb-longcode-dot ${cls}` })
     dots.appendChild(dot)
   }
   bar.appendChild(dots)
@@ -110,7 +208,7 @@ function renderThemeDecor(bar: HTMLElement, themeStyle: string) {
   if (styleClasses.includes(`${BAR_CLASS}--${themeStyle}`)) {
     bar.classList.add(`${BAR_CLASS}--${themeStyle}`)
   }
-  bar.querySelectorAll(`.${DOTS_CLASS}, .${WIN_CLASS}, .${CHROME_CLASS}, .${TERMINAL_CLASS}, .${CODESYM_CLASS}`).forEach((el) => el.remove())
+  removeAll(bar, `.${DOTS_CLASS}, .${WIN_CLASS}, .${CHROME_CLASS}, .${TERMINAL_CLASS}, .${CODESYM_CLASS}`)
   if (themeStyle === "mac") {
     // Mac 风格：左侧红黄绿圆点
     appendDots(bar, ["cb-longcode-dot--red", "cb-longcode-dot--yellow", "cb-longcode-dot--green"])
@@ -119,43 +217,47 @@ function renderThemeDecor(bar: HTMLElement, themeStyle: string) {
     appendDots(bar, ["cb-longcode-dot--orange", "cb-longcode-dot--amber", "cb-longcode-dot--green2"])
   } else if (themeStyle === "windows") {
     // Windows 风格：左侧窗口控制按钮（关闭 ✕ / 最大化 ▢ / 最小化 ─）
-    const win = document.createElement("div")
-    win.className = WIN_CLASS
+    const win = createEl("div", { className: WIN_CLASS })
     for (const ch of ["✕", "▢", "─"]) {
-      const btn = document.createElement("span")
-      btn.className = "cb-longcode-win-btn"
-      btn.textContent = ch
+      const btn = createEl("span", {
+        className: "cb-longcode-win-btn",
+        textContent: ch,
+      })
       win.appendChild(btn)
     }
     bar.appendChild(win)
   } else if (themeStyle === "chrome") {
     // Chrome 标签风格：顶部标签页 + 新标签页加号
-    const chrome = document.createElement("div")
-    chrome.className = CHROME_CLASS
-    const tab = document.createElement("span")
-    tab.className = "cb-longcode-chrome-tab"
-    tab.textContent = "代码"
-    const plus = document.createElement("span")
-    plus.className = "cb-longcode-chrome-plus"
-    plus.textContent = "+"
+    const chrome = createEl("div", { className: CHROME_CLASS })
+    const tab = createEl("span", {
+      className: "cb-longcode-chrome-tab",
+      textContent: "代码",
+    })
+    const plus = createEl("span", {
+      className: "cb-longcode-chrome-plus",
+      textContent: "+",
+    })
     chrome.appendChild(tab)
     chrome.appendChild(plus)
     bar.appendChild(chrome)
   } else if (themeStyle === "terminal") {
     // 终端提示符：❯_ 提示符 + 极简色块
-    const term = document.createElement("div")
-    term.className = TERMINAL_CLASS
-    term.textContent = "❯"
-    const cursor = document.createElement("span")
-    cursor.className = "cb-longcode-terminal-cursor"
-    cursor.textContent = "_"
+    const term = createEl("div", {
+      className: TERMINAL_CLASS,
+      textContent: "❯",
+    })
+    const cursor = createEl("span", {
+      className: "cb-longcode-terminal-cursor",
+      textContent: "_",
+    })
     term.appendChild(cursor)
     bar.appendChild(term)
   } else if (themeStyle === "codesym") {
     // 代码符号：</> 装饰
-    const sym = document.createElement("div")
-    sym.className = CODESYM_CLASS
-    sym.textContent = "</>"
+    const sym = createEl("div", {
+      className: CODESYM_CLASS,
+      textContent: "</>",
+    })
     bar.appendChild(sym)
   }
 }
@@ -168,9 +270,9 @@ const fadeInstalled = new WeakSet<HTMLElement>()
  * 幂等（WeakSet 防重复 + AbortController 清理），每次长代码/主题栏渲染时调用，
  * 确保按钮创建后也生效。clearLongCodeBar 时 abort 解除监听，杜绝重建累积。
  */
-const fadeControllers = new WeakMap<HTMLElement, AbortController>()
+const fadeControllers = new ControllerManager()
 /** 收起按钮 click 委托的控制器（btn 重建时 abort 旧委托，杜绝累积） */
-const clickControllers = new WeakMap<HTMLElement, AbortController>()
+const clickControllers = new ControllerManager()
 
 function ensureScrollFade(codeBlock: HTMLElement) {
   if (fadeInstalled.has(codeBlock)) {
@@ -184,17 +286,62 @@ function ensureScrollFade(codeBlock: HTMLElement) {
   const ac = new AbortController()
   fadeControllers.set(codeBlock, ac)
   let fadeTimer = 0
+  let scrollTimer = 0
+  // 最近一次鼠标位置（滚动停止时用于判定是否停留在边缘，无需再移动鼠标）
+  let lastX = -1
+  let lastY = -1
+  /** 依据坐标更新 hover 类（mousemove 与滚动停止时共用） */
+  const applyHover = (x: number, y: number) => {
+    const rect = codeBlock.getBoundingClientRect()
+    codeBlock.classList.toggle(HOVER_V_CLASS, x > rect.right - 12)
+    codeBlock.classList.toggle(HOVER_H_CLASS, y > rect.bottom - 12)
+  }
   hljs.addEventListener("scroll", () => {
     const ov = getOverlay(codeBlock)
     const bar = ov.querySelector<HTMLElement>(`.${BAR_CLASS}`)
     bar?.classList.add(BAR_SCROLLING_CLASS)
     const b = ov.querySelector<HTMLElement>(`.${BTN_CLASS}`)
     b?.classList.add(BTN_SCROLLING_CLASS)
+    // 滚动中：两个滚动条都显示（CSS：cb-longcode-scrolling 恢复横纵）
+    codeBlock.classList.add(SCROLLING_CLASS)
     window.clearTimeout(fadeTimer)
     fadeTimer = window.setTimeout(() => {
       bar?.classList.remove(BAR_SCROLLING_CLASS)
       b?.classList.remove(BTN_SCROLLING_CLASS)
     }, 300)
+    // 停止滚动 800ms 后两个滚动条都隐藏（悬停边缘由 mousemove 独立控制）
+    window.clearTimeout(scrollTimer)
+    scrollTimer = window.setTimeout(() => {
+      codeBlock.classList.remove(SCROLLING_CLASS)
+      // 鼠标仍停留在边缘时补上 hover 类：滚动条隐藏后无需再移动鼠标即可悬停唤出
+      if (lastX >= 0 && lastY >= 0) {
+        applyHover(lastX, lastY)
+      }
+    }, 800)
+  }, { signal: ac.signal })
+  // 悬停滚动条位置才显示对应滚动条：
+  // - 右侧边缘（垂直滚动条位置）→ HOVER_V
+  // - 底部边缘（水平滚动条位置）→ HOVER_H
+  codeBlock.addEventListener("mousemove", (e: MouseEvent) => {
+    lastX = e.clientX
+    lastY = e.clientY
+    applyHover(e.clientX, e.clientY)
+    // 按钮隐藏开关（hideFoldButton）：鼠标进入按钮矩形时显示按钮
+    // 按钮 pointer-events:none，无法用 :hover，需在冒泡的 mousemove 里按坐标判定
+    const btn = getOverlay(codeBlock).querySelector<HTMLElement>(`.${BTN_CLASS}`)
+    if (btn?.classList.contains(BTN_HIDDEN_CLASS)) {
+      const rect = btn.getBoundingClientRect()
+      btn.classList.toggle(BTN_VISIBLE_CLASS,
+        e.clientX >= rect.left && e.clientX <= rect.right
+        && e.clientY >= rect.top && e.clientY <= rect.bottom)
+    }
+  }, { signal: ac.signal })
+  codeBlock.addEventListener("mouseleave", () => {
+    lastX = -1
+    lastY = -1
+    codeBlock.classList.remove(HOVER_V_CLASS)
+    codeBlock.classList.remove(HOVER_H_CLASS)
+    getOverlay(codeBlock).querySelector(`.${BTN_CLASS}`)?.classList.remove(BTN_VISIBLE_CLASS)
   }, { signal: ac.signal })
 }
 
@@ -224,13 +371,19 @@ function renderLongCodeBar(
   lineCount: number,
   threshold: number,
   topNHeight: number,
-  themeStyle: string,
+  settings: CodeBlockSettings,
 ) {
+  // 从设置派生装饰栏/按钮行为（避免 7 个散参数，调用方零噪音）
+  const themeStyle = settings.themeStyleEnabled ? settings.themeStyle : ""
+  const hideButton = settings.hideFoldButton
+  const compatTheme = settings.forceThemeCompat
   const wasFolded = isFolded(codeBlock)
   const isLong = lineCount > threshold
   if (!isLong && !wasFolded) {
-    // 非长代码且未折叠：完整清理（复用 clearLongCodeBar）
+    // 非长代码且未折叠：完整清理（复用 clearLongCodeBar），
+    // 并删除跨会话持久化状态（块不再受长代码折叠管理，避免残留）
     clearLongCodeBar(codeBlock)
+    persistFoldState(codeBlock, false)
     return
   }
   const bar = ensureThemeBar(codeBlock)
@@ -254,6 +407,8 @@ function renderLongCodeBar(
         delete codeBlock.dataset[FOLDED_ATTR]
         foldStates.delete(codeBlock)
       }
+      // 跨会话持久化：重开思源/文档后保持折叠状态
+      persistFoldState(codeBlock, folded)
       applyFold(codeBlock, folded, folded ? topNHeight : 0)
       updateBtn(btn!, folded)
       // 收起后自动滚动：让代码块顶部（第一行）落在视口中间，直接看到折叠效果
@@ -281,29 +436,41 @@ function renderLongCodeBar(
   // 恢复折叠状态（data 属性持久化），高度：同阈值用缓存，阈值变化自动调整
   const height = resolveFoldHeight(codeBlock, threshold, topNHeight)
   applyFold(codeBlock, wasFolded, wasFolded ? height : 0)
-  // 装饰栏隐藏条件：默认主题（与语言标记重叠）或主题风格关闭
-  if (isDefaultTheme() || !themeStyle) {
+  // 未折叠（展开）长代码：挂 expanded 类，启用「水平滚动条默认隐藏、悬停出现」
+  codeBlock.classList.toggle(EXPANDED_CLASS, !wasFolded)
+  // 装饰栏隐藏条件：默认主题（与左上角语言标记重叠）或主题风格关闭。
+  // 强制兼容模式（compatTheme）下语言标记已移至右侧 → 忽略默认主题隐藏，始终显示
+  if ((!compatTheme && isDefaultTheme()) || !themeStyle) {
     bar.style.display = "none"
   } else {
     bar.style.display = ""
     renderThemeDecor(bar, themeStyle)
   }
   updateBtn(btn, wasFolded)
+  // 按钮隐藏开关：打开时默认隐藏（悬停按钮位置由 ensureScrollFade 的
+  // mousemove 检测控制显示）；关闭时移除隐藏状态，保持常显
+  if (hideButton) {
+    btn.classList.add(BTN_HIDDEN_CLASS)
+  } else {
+    btn.classList.remove(BTN_HIDDEN_CLASS, BTN_VISIBLE_CLASS)
+  }
 }
 
 /** 完整清理长代码折叠（卸载时调用，恢复完整显示并清除状态） */
 function clearLongCodeBar(codeBlock: HTMLElement) {
   fadeInstalled.delete(codeBlock)
-  fadeControllers.get(codeBlock)?.abort()
-  fadeControllers.delete(codeBlock)
-  clickControllers.get(codeBlock)?.abort()
-  clickControllers.delete(codeBlock)
+  fadeControllers.abortAndDelete(codeBlock)
+  clickControllers.abortAndDelete(codeBlock)
   const ov = getOverlay(codeBlock)
   ov.querySelector(`.${BAR_CLASS}`)?.remove()
   ov.querySelector(`.${BTN_CLASS}`)?.remove()
   applyFold(codeBlock, false, 0)
   delete codeBlock.dataset[FOLDED_ATTR]
+  codeBlock.classList.remove(EXPANDED_CLASS)
   foldStates.delete(codeBlock)
+  // 注意：不在这里删除跨会话持久化状态——卸载/清理时保留，
+  // 重开思源后由 initFoldPersistence 恢复；仅在块变短不再受
+  // 长代码管理时（renderLongCodeBar 的 !isLong 分支）才删除。
 }
 
 /**
@@ -366,11 +533,12 @@ function renderLongCodeSection(
     const topNHeight = top > 0
       ? targetHeight - padTop - padBottom - borderV
       : 0
-    renderLongCodeBar(codeBlock, lineCount, n, topNHeight, showTheme ? settings.themeStyle : "")
+    renderLongCodeBar(codeBlock, lineCount, n, topNHeight, settings)
     return
   }
-  // 短代码：主题风格关闭或默认主题 → 清理装饰栏；否则渲染装饰栏
-  if (!showTheme || defaultTheme) {
+  // 短代码：主题风格关闭 → 清理装饰栏；否则渲染装饰栏。
+  // 强制兼容模式下语言标记已移至右侧，忽略默认主题隐藏
+  if (!showTheme || (!settings.forceThemeCompat && defaultTheme)) {
     clearLongCodeBar(codeBlock)
   } else {
     renderThemeBar(codeBlock, settings.themeStyle)

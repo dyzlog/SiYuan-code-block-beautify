@@ -40,6 +40,12 @@ export interface CodeBlockSettings {
   themeStyleEnabled: boolean
   /** 顶部栏主题风格（"" = 无，"mac" = Mac 风格圆点） */
   themeStyle: string
+  /** 折叠/展开按钮隐藏开关（true = 按钮默认隐藏，鼠标移到按钮位置才显示） */
+  hideFoldButton: boolean
+  /** 强制兼容主题模式（true = 语言标记移至右侧与复制/更多并排，装饰栏强制显示） */
+  forceThemeCompat: boolean
+  /** 隐藏代码块头部栏的语言标记/复制/更多按钮 */
+  hideActionTools: boolean
 }
 
 export const DEFAULT_SETTINGS: CodeBlockSettings = {
@@ -61,27 +67,36 @@ export const DEFAULT_SETTINGS: CodeBlockSettings = {
   longCodeThreshold: 20,
   themeStyleEnabled: true,
   themeStyle: "mac",
+  hideFoldButton: false,
+  forceThemeCompat: false,
+  hideActionTools: false,
 }
 
 /** 将已保存的数据与默认值合并，兼容缺失字段与旧版本布尔开关数据 */
 export function mergeSettings(raw: unknown): CodeBlockSettings {
   const base: CodeBlockSettings = { ...DEFAULT_SETTINGS }
-  if (raw && typeof raw === "object") {
-    const r = raw as Record<string, unknown>
-    for (const key of Object.keys(base) as (keyof CodeBlockSettings)[]) {
-      const v = r[key]
-      if (v !== undefined && typeof v === typeof base[key]) {
-        (base as unknown as Record<string, unknown>)[key] = v
-      }
-    }
-    // 旧版本数据迁移：border/shadow 布尔开关 → 数值
-    if (typeof r.border === "boolean" && r.borderWidth === undefined) {
-      base.borderWidth = r.border ? 1 : 0
-    }
-    if (typeof r.shadow === "boolean" && r.shadowSize === undefined) {
-      base.shadowSize = r.shadow ? 8 : 0
+  if (!raw || typeof raw !== "object") {
+    return base
+  }
+
+  const r = raw as Record<string, unknown>
+  for (const key of Object.keys(base) as (keyof CodeBlockSettings)[]) {
+    const v = r[key]
+    // 仅当值已定义且类型匹配时才覆盖
+    if (v !== undefined && typeof v === typeof base[key]) {
+      (base as unknown as Record<string, unknown>)[key] = v
     }
   }
+
+  // 旧版本数据迁移：border/shadow 布尔开关 → 数值
+  // （历史版本用户升级时已完成，新用户无需该逻辑，下个大版本可移除）
+  if (typeof r.border === "boolean" && r.borderWidth === undefined) {
+    base.borderWidth = r.border ? 1 : 0
+  }
+  if (typeof r.shadow === "boolean" && r.shadowSize === undefined) {
+    base.shadowSize = r.shadow ? 8 : 0
+  }
+
   return base
 }
 

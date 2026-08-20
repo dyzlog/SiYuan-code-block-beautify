@@ -1,20 +1,26 @@
 /**
- * Overlay 层：插件注入元素的兄弟容器（污染根治）。
+ * Overlay 层：插件注入元素的容器（污染根治）。
  *
- * 所有视觉装饰元素（统计角标/长代码条/收起按钮等）挂在 codeBlock 的
- * 「兄弟 overlay」上，而不是 codeBlock 内部——否则思源序列化代码块内容
- * （updateTransaction 读 element.outerHTML）时会把装饰 DOM 写进文档，
- * 永久污染用户代码。
+ * 所有视觉装饰元素（统计角标/长代码条/收起按钮等）都挂在 overlay 上，
+ * 而不是 codeBlock 内部——否则思源序列化代码块内容（updateTransaction 读
+ * element.outerHTML）时会把装饰 DOM 写进文档，永久污染用户代码。
  *
- * 定位方案：overlay 插到 codeBlock 的父容器内、codeBlock 之前（兄弟）：
- * - 不在 codeBlock 内部 → outerHTML 序列化不带走（不污染）
- * - 在 codeBlock 之前 → 思源块框选从 codeBlock 开始向后（nextElementSibling）
- *   遍历兄弟链，不会回头经过前面的 overlay（不闪烁）
- * - 与 codeBlock 同父 → transform 用 offsetTop/offsetLeft 相对同一 offsetParent
- *   的差值，即精确位置（无嵌套/滚动坐标系问题）
- * - 滚动时父容器内容一起移动，差值不变 → transform 无需更新（零浮动）
- * - 同生共死：clip-path: inset() 裁剪到与代码块相同的可视区；完全滚出时隐藏
+ * 挂载位置（防序列化污染的关键）：overlay 挂在代码块所在滚动容器
+ * .protyle-content 下（.protyle-wysiwyg 文档内容容器之外）。
+ * 实测发现：overlay 若挂在 wysiwyg 内，思源整篇序列化/保存时会把无
+ * data-node-id 的 overlay 当作 HTML 块（NodeHTMLBlock）写入文档，统计角标/
+ * 装饰栏等装饰会永久残留进用户笔记（已发生实际污染案例）。挂在滚动容器下
+ * 则不在文档结构内，序列化不会带走。
+ *
+ * 定位方案（绝对定位 + offsetParent 链偏移）：
+ * - overlay absolute left:0 top:0，left/top = codeBlock 相对 ov.offsetParent
+ *   沿 offsetParent 链累加的偏移（computeStaticOffset）
+ * - 给 .protyle-content 设 position:relative：overlay 的 offsetParent 必须落在
+ *   滚动容器内，滚动时 overlay 才随内容一起移动（否则 offsetParent 是外层
+ *   .protyle 时 overlay 不随容器滚动，位置错位）
+ * - 滚动时容器内容一起移动，偏移不变 → 无需更新（零浮动零计算）
  * - ResizeObserver 跟随尺寸变化（折叠/编辑导致的行高变化）
+ * - 完全滚出可视区时隐藏（onScroll 批量读写，一次回流）
  */
 const overlayMap = new WeakMap<HTMLElement, HTMLElement>()
 /** 每个 codeBlock 对应的滚动容器（.protyle-content），缓存避免每帧 closest */
@@ -151,13 +157,38 @@ function syncOverlay(codeBlock: HTMLElement, ov: HTMLElement) {
       syncedThisFrame = new WeakSet<HTMLElement>()
     })
   }
-  // 布局变化（ResizeObserver 触发）时重算偏移：overlay 与 codeBlock 同父，
-  // offsetTop/offsetLeft 相对同一 offsetParent，差值即精确位置
-  staticOffsets.set(ov, {
-    left: codeBlock.offsetLeft,
-    top: codeBlock.offsetTop,
-  })
+  // 布局变化（ResizeObserver 触发）时重算偏移：overlay 挂在滚动容器
+  // .protyle-content 下（不在 wysiwyg 文档结构内，防序列化污染），与 codeBlock
+  // 不在同一层，需沿 offsetParent 链累加 codeBlock 相对 ov.offsetParent 的偏移
+  staticOffsets.set(ov, computeStaticOffset(codeBlock, ov))
   applyGeom(ov, readGeom(codeBlock))
+}
+
+/**
+ * 计算 codeBlock 相对 ov.offsetParent 的布局偏移。
+ * 沿 offsetParent 链自下而上累加 offsetLeft/offsetTop，直到 ov 的定位祖先；
+ * 滚动容器内坐标不变 → 滚动时无需更新（零浮动零计算）。
+ */
+function computeStaticOffset(codeBlock: HTMLElement, ov: HTMLElement): { left: number, top: number } {
+  const target = ov.offsetParent as HTMLElement | null
+  if (!target) {
+    return {
+      left: codeBlock.offsetLeft,
+      top: codeBlock.offsetTop,
+    }
+  }
+  let left = 0
+  let top = 0
+  let cur: HTMLElement | null = codeBlock
+  while (cur && cur !== target) {
+    left += cur.offsetLeft
+    top += cur.offsetTop
+    cur = cur.offsetParent as HTMLElement | null
+  }
+  return {
+    left,
+    top,
+  }
 }
 
 let scrollInstalled = false
@@ -228,23 +259,6 @@ function onScroll() {
 }
 
 /**
- * wheel 转发：overlay 覆盖在代码块上，其可交互子元素（长代码按钮等）
- * 会拦截滚轮事件。这里把滚动量转发给最近的滚动容器 .protyle-content，
- * 保证鼠标停在按钮上时滚轮依然滚动文档。
- */
-function ensureWheelForward(codeBlock: HTMLElement, ov: HTMLElement) {
-  ov.addEventListener("wheel", (e: WheelEvent) => {
-    const scroller = codeBlock.closest<HTMLElement>(".protyle-content")
-    if (!scroller) {
-      return
-    }
-    e.preventDefault()
-    scroller.scrollTop += e.deltaY
-    scroller.scrollLeft += e.deltaX
-  }, { passive: false })
-}
-
-/**
  * 获取（或创建）codeBlock 的 overlay 容器。
  * 创建时自动定位 + 监听尺寸变化与滚动；重复调用幂等。
  * 不修改任何祖先元素的样式（避免破坏思源原生布局）。
@@ -278,34 +292,30 @@ export function getOverlay(codeBlock: HTMLElement): HTMLElement {
     // 用 transform 上移，可能超出 overlay 顶部穿透到上方代码块——overflow
     // hidden 把移出的部分裁掉，杜绝「下方块内容显示到上方块」的穿透
     ov.style.overflow = "hidden"
-    const parent = codeBlock.parentElement
-    // 关键：overlay 插到 codeBlock 的「父容器内、codeBlock 之前」（兄弟）。
-    // - 不在 codeBlock 内部 → 思源 outerHTML 序列化不会带走它（不污染）
-    // - 在 codeBlock 之前 → 思源块框选从 codeBlock 开始向后遍历 nextElementSibling，
-    //   不会回头经过前面的 overlay（不闪烁）
-    // - 与 codeBlock 同父 → transform 用 codeBlock.offsetTop/offsetLeft 相对
-    //   同一 offsetParent，差值即精确位置（无嵌套/滚动坐标系问题）
-    if (parent) {
-      // 父容器 position: relative：使 overlay（absolute）的 offsetParent = 父容器，
-      // top/left 直接相对 codeBlock 位置（与 codeBlock 同父，差值精确）。
-      // 注意：只加这一个声明，不影响父容器内其它子元素的布局（relative 无副作用）。
-      if (!parent.style.position) {
-        parent.style.position = "relative"
+    // 挂载容器：代码块所在滚动容器 .protyle-content（wysiwyg 之外）。
+    // 关键修复：overlay 若挂在 .protyle-wysiwyg（文档内容容器）内，思源整篇
+    // 序列化/保存时会把无 data-node-id 的 overlay 当作 HTML 块（NodeHTMLBlock）
+    // 写入文档 → 装饰（统计角标/装饰栏）永久污染用户文档。挂在滚动容器下
+    // 则不在文档结构内，序列化不会带走；同时滚动时随内容一起移动（同容器）。
+    const container = codeBlock.closest<HTMLElement>(".protyle-content")
+      ?? codeBlock.parentElement
+    if (container) {
+      // 直接 append 即可（absolute 定位不依赖兄弟关系）。
+      // 关键：给滚动容器设 position:relative——overlay 的 offsetParent 必须落在
+      // 滚动容器内，滚动时 overlay 才随内容一起移动（否则 offsetParent 是外层
+      // .protyle，absolute 定位不随容器滚动）。思源 .protyle-content 默认 static
+      // 且其内 absolute 元素都相对块自身（[data-node-id]），加 relative 无副作用。
+      if (!container.style.position) {
+        container.style.position = "relative"
       }
-      parent.insertBefore(ov, codeBlock)
+      container.appendChild(ov)
     }
     overlayMap.set(codeBlock, ov)
     activeBlocks.add(codeBlock)
     scrollerMap.set(codeBlock, codeBlock.closest<HTMLElement>(".protyle-content"))
-    // 记录 codeBlock 相对 overlay 的布局偏移（transform 基准）。
-    // overlay 与 codeBlock 同父（absolute left:0 top:0），两者 offsetParent
-    // 相同 → offsetTop/offsetLeft 差值即精确位置。滚动时父容器内容一起移动，
-    // 差值不变 → transform 无需更新（零浮动零计算）。
-    staticOffsets.set(ov, {
-      left: codeBlock.offsetLeft,
-      top: codeBlock.offsetTop,
-    })
-    ensureWheelForward(codeBlock, ov)
+    // 记录 codeBlock 相对 ov.offsetParent 的布局偏移（absolute 定位基准）。
+    // 滚动时容器内容一起移动，偏移不变 → 无需更新（零浮动零计算）。
+    staticOffsets.set(ov, computeStaticOffset(codeBlock, ov))
     // 位置/尺寸变化自动跟随：共享 ResizeObserver 观察该块（布局变化时重新定位）
     if ("ResizeObserver" in window) {
       observeBlockResize(codeBlock)

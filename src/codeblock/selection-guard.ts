@@ -16,6 +16,9 @@ import {
   registerDecor,
 } from "./registry"
 
+/** 思源异步重加块选中标记的清理时间点（毫秒） */
+const BLOCK_SELECT_CLEANUP_TIMEOUTS = [0, 30, 120] as const
+
 /** 当前是否从 .hljs 文本开始拖选 */
 let draggingCodeText = false
 /** document mouseup 监听引用（供卸载） */
@@ -69,13 +72,8 @@ function resolveSelectionHljs(selection: Selection | null): HTMLElement | null {
   return null
 }
 
-/** 清理思源块选中标记（保留原生 selection） */
-function clearBlockSelect() {
-  const sel = window.getSelection()
-  const hljs = resolveSelectionHljs(sel)
-  if (!shouldClearBlockSelect(sel, hljs)) {
-    return
-  }
+/** 移除所有思源块选中标记 */
+function removeBlockSelectMarks(): void {
   document.querySelectorAll<HTMLElement>(".protyle-wysiwyg--select").forEach((el) => {
     el.classList.remove("protyle-wysiwyg--select")
   })
@@ -99,9 +97,7 @@ function installRealtimeClear() {
     if (!hljs || !shouldClearBlockSelect(sel, hljs)) {
       return
     }
-    document.querySelectorAll<HTMLElement>(".protyle-wysiwyg--select").forEach((el) => {
-      el.classList.remove("protyle-wysiwyg--select")
-    })
+    removeBlockSelectMarks()
   })
 }
 
@@ -115,11 +111,21 @@ function installDocumentMouseUp() {
       return
     }
     draggingCodeText = false
-    setTimeout(clearBlockSelect, 0)
-    setTimeout(clearBlockSelect, 30)
-    setTimeout(clearBlockSelect, 120)
+    for (const timeout of BLOCK_SELECT_CLEANUP_TIMEOUTS) {
+      setTimeout(clearBlockSelect, timeout)
+    }
   }
   document.addEventListener("mouseup", onDocMouseUp)
+}
+
+/** 清理思源块选中标记（保留原生 selection） */
+function clearBlockSelect() {
+  const sel = window.getSelection()
+  const hljs = resolveSelectionHljs(sel)
+  if (!shouldClearBlockSelect(sel, hljs)) {
+    return
+  }
+  removeBlockSelectMarks()
 }
 
 /** 初始化：给 .hljs 绑定 mousedown（标记拖选起点，防重复） */

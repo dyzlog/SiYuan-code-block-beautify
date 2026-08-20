@@ -122,7 +122,11 @@ function clearBackgroundImageUrl() {
 /**
  * CSS 纹理主题 class 列表（须与 codeblock.scss 中 .cb-bg-* 定义一致）。
  */
-export const TEXTURE_CLASSES = [
+/** 背景纹理主题 class 前缀 */
+const BG_CLASS_PREFIX = "cb-bg-"
+
+/** 背景纹理主题名（与 TEXTURE_CSS 的 key 一一对应） */
+const TEXTURE_NAMES = [
   "grid",
   "dots",
   "ruled",
@@ -133,10 +137,11 @@ export const TEXTURE_CLASSES = [
   "notebook",
   "carbon",
   "graph",
-].map((t) => `cb-bg-${t}`)
+  "sticky",
+] as const
 
-/** 背景纹理主题 class 前缀 */
-const BG_CLASS_PREFIX = "cb-bg-"
+/** 背景纹理主题 class 列表（须与 codeblock.scss 中 .cb-bg-* 定义一致） */
+export const TEXTURE_CLASSES: string[] = TEXTURE_NAMES.map((t) => `${BG_CLASS_PREFIX}${t}`)
 
 /**
  * 背景纹理 CSS（按需注入，不在主样式文件全量加载）。
@@ -153,6 +158,14 @@ const TEXTURE_CSS: Record<string, string> = {
   notebook: `.code-block.cb-beautified.cb-bg-notebook{background-image:repeating-linear-gradient(0deg,transparent 0 calc(1.7em - 1px),rgba(0,0,0,.07) calc(1.7em - 1px) 1.7em),linear-gradient(90deg,rgba(220,80,80,.35) 0 1px,transparent 1px);background-size:auto,56px 100%;background-position:0 0,0 0}`,
   carbon: `.code-block.cb-beautified.cb-bg-carbon{background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.1) 0 1px,transparent 1px 6px),repeating-linear-gradient(-45deg,rgba(0,0,0,.1) 0 1px,transparent 1px 6px)}`,
   graph: `.code-block.cb-beautified.cb-bg-graph{background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.06) 0 1px,transparent 1px 5px),repeating-linear-gradient(90deg,rgba(0,0,0,.06) 0 1px,transparent 1px 5px)}`,
+  // 经典款便利贴：柠檬黄底色 + 顶部半透明胶条 + 右下角折角 + 手写横线。
+  // 全部用 background 渐变实现（复用纹理机制，无需额外 DOM 元素）：
+  // - 底色 #fff9c4（柠檬黄，覆盖主题背景/自定义背景色）
+  // - 横线：行距对齐代码行（同 ruled）
+  // - 胶条：顶部 14px 半透明白（模拟透明胶带）
+  // - 折角：右下角 315° 深一档黄三角（模拟折起背面）+ 1px 折痕阴影
+  // - ::after 遮罩透明：避免主题背景遮罩盖住便利贴底色
+  sticky: `.code-block.cb-beautified.cb-bg-sticky{background-color:#fff9c4!important;background-image:repeating-linear-gradient(0deg,transparent 0 calc(1.7em - 1px),rgba(0,0,0,.07) calc(1.7em - 1px) 1.7em),linear-gradient(180deg,rgba(255,255,255,.5) 0,rgba(255,255,255,.5) 14px,transparent 14px),linear-gradient(315deg,#f2e8ab 0,#f2e8ab 15px,transparent 15px),linear-gradient(315deg,rgba(0,0,0,.14) 0,rgba(0,0,0,.14) 1px,transparent 1px);background-position:0 0,0 0,right bottom,right bottom;background-size:auto,100% 100%,100% 100%,100% 100%;background-repeat:repeat,no-repeat,no-repeat,no-repeat}.code-block.cb-beautified.cb-bg-sticky::after{background-color:transparent!important}`,
 }
 
 /** 已注入的纹理 style 标签（Set<theme>，避免重复注入） */
